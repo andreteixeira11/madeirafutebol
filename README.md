@@ -1,2 +1,0 @@
-# madeirafutebol
-Created by Rork
