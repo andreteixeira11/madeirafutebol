@@ -25,7 +25,6 @@ import {
   isMatchLive,
   fetchAllMatchesMerged,
   fetchCompetitionsLogos,
-  buildCompMap,
   parseMatchDate,
   getMatchTimestamp,
   CompetitionInfo,
@@ -351,7 +350,19 @@ export default function ResultsScreen() {
     staleTime: 30 * 60 * 1000,
   });
 
-  const competitionMaps = useMemo(() => buildCompMap(competitions ?? []), [competitions]);
+const competitionMaps = useMemo(() => {
+  const nameMap: Record<number, string> = {};
+  const logoMap: Record<number, string> = {};
+
+  (competitions ?? []).forEach((competition) => {
+    nameMap[competition.id] = competition.title;
+    if (competition.logo) {
+      logoMap[competition.id] = competition.logo;
+    }
+  });
+
+  return { nameMap, logoMap };
+}, [competitions]);
   const competitionList = useMemo(() => competitions ?? ([] as CompetitionInfo[]), [competitions]);
 
   const filteredMatches = useMemo(() => {
