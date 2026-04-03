@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "madeirafutebol.app"
+      "bundleIdentifier": "org.reactjs.native.example.madeirafutebol"
     },
     "android": {
       "adaptiveIcon": {
