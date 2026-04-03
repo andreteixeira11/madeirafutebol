@@ -10,15 +10,35 @@ import {
   RefreshControl,
   Image,
   Modal,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Calendar, X, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Calendar, X, ChevronLeft, ChevronRight, Search, Trophy } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { APP_LOGO_URL, APP_TAGLINE } from '@/constants/branding';
 import { APIMatch } from '@/types/football';
-import { extractScore, isMatchFinished, isMatchLive, fetchAllMatchesMerged, fetchCompetitionsLogos, buildCompMap, parseMatchDate, getMatchTimestamp } from '@/utils/scores';
+import {
+  extractScore,
+  isMatchFinished,
+  isMatchLive,
+  fetchAllMatchesMerged,
+  fetchCompetitionsLogos,
+  buildCompMap,
+  parseMatchDate,
+  getMatchTimestamp,
+  CompetitionInfo,
+  getCompetitionPopularityOrder,
+} from '@/utils/scores';
+
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 function isSameDay(dateA: Date, dateB: Date): boolean {
   return (
@@ -37,13 +57,34 @@ function TeamLogo({ uri, fallback, size = 24 }: { uri?: string; fallback: string
     return <Image source={{ uri }} style={[styles.teamLogo, { width: size, height: size }]} resizeMode="contain" />;
   }
   return (
-    <View style={[styles.teamDot, { width: size, height: size, borderRadius: size / 2 }]}>
+    <View style={[styles.teamDot, { width: size, height: size, borderRadius: size / 2 }]}> 
       <Text style={[styles.teamDotText, { fontSize: size * 0.45 }]}>{fallback.charAt(0)}</Text>
     </View>
   );
 }
 
-const MatchRow = React.memo(function MatchRow({ match, compName }: { match: APIMatch; compName: string }) {
+function CompetitionLogo({ uri }: { uri?: string }) {
+  if (uri) {
+    return <Image source={{ uri }} style={styles.competitionLogo} resizeMode="contain" />;
+  }
+  return (
+    <View style={styles.competitionLogoFallback}>
+      <Trophy size={14} color={Colors.primary} />
+    </View>
+  );
+}
+
+const MatchRow = React.memo(function MatchRow({
+  match,
+  compName,
+  competitionId,
+  compLogo,
+}: {
+  match: APIMatch;
+  compName: string;
+  competitionId: number;
+  compLogo?: string;
+}) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const score = useMemo(() => extractScore(match), [match]);
   const finished = useMemo(() => isMatchFinished(match), [match]);
@@ -67,9 +108,11 @@ const MatchRow = React.memo(function MatchRow({ match, compName }: { match: APIM
         id: String(match.id),
         matchData: JSON.stringify(match),
         compName,
+        competitionId: String(competitionId),
+        compLogo,
       },
     });
-  }, [match, compName]);
+  }, [match, compName, competitionId, compLogo]);
 
   const matchTime = useMemo(() => {
     const parsed = parseMatchDate(match.date);
@@ -79,7 +122,7 @@ const MatchRow = React.memo(function MatchRow({ match, compName }: { match: APIM
 
   return (
     <Pressable onPress={handlePress} onPressIn={onPressIn} onPressOut={onPressOut} testID={`match-${match.id}`}>
-      <Animated.View style={[styles.matchRow, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.matchRow, { transform: [{ scale: scaleAnim }] }]}> 
         <View style={styles.matchTeams}>
           <View style={styles.teamRow}>
             <TeamLogo uri={match.team1_logo} fallback={match.team1} />
@@ -126,6 +169,7 @@ type DateFilter = 'all' | 'today' | 'tomorrow' | 'custom';
 interface MatchesGroup {
   competitionId: number;
   competitionName: string;
+  competitionLogo?: string;
   matches: APIMatch[];
 }
 
@@ -140,7 +184,11 @@ function DatePickerModal({
   onSelect: (date: Date) => void;
   onClose: () => void;
 }) {
-  const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
   const insets = useSafeAreaInsets();
 
   const [viewMonth, setViewMonth] = useState<Date>(() => {
@@ -157,19 +205,19 @@ function DatePickerModal({
     const totalDays = new Date(year, month + 1, 0).getDate();
     const cells: (Date | null)[] = [];
     const startOffset = (firstDay + 6) % 7;
-    for (let i = 0; i < startOffset; i++) cells.push(null);
-    for (let d = 1; d <= totalDays; d++) {
-      cells.push(new Date(year, month, d));
+    for (let i = 0; i < startOffset; i += 1) cells.push(null);
+    for (let day = 1; day <= totalDays; day += 1) {
+      cells.push(new Date(year, month, day));
     }
     return cells;
   }, [viewMonth]);
 
   const prevMonth = useCallback(() => {
-    setViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    setViewMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   }, []);
 
   const nextMonth = useCallback(() => {
-    setViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+    setViewMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
   }, []);
 
   const monthLabel = viewMonth.toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
@@ -179,7 +227,7 @@ function DatePickerModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}> 
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Escolher Data</Text>
@@ -199,8 +247,8 @@ function DatePickerModal({
           </View>
 
           <View style={styles.calWeekDays}>
-            {weekDays.map(d => (
-              <Text key={d} style={styles.calWeekDay}>{d}</Text>
+            {weekDays.map((day) => (
+              <Text key={day} style={styles.calWeekDay}>{day}</Text>
             ))}
           </View>
 
@@ -224,11 +272,13 @@ function DatePickerModal({
                     onClose();
                   }}
                 >
-                  <Text style={[
-                    styles.calCellText,
-                    isToday && styles.calCellTodayText,
-                    isSelected && styles.calCellSelectedText,
-                  ]}>
+                  <Text
+                    style={[
+                      styles.calCellText,
+                      isToday && styles.calCellTodayText,
+                      isSelected && styles.calCellSelectedText,
+                    ]}
+                  >
                     {day.getDate()}
                   </Text>
                 </Pressable>
@@ -239,7 +289,10 @@ function DatePickerModal({
           <View style={styles.quickDates}>
             <Pressable
               style={styles.quickDateBtn}
-              onPress={() => { onSelect(today); onClose(); }}
+              onPress={() => {
+                onSelect(today);
+                onClose();
+              }}
             >
               <Text style={styles.quickDateText}>Hoje</Text>
             </Pressable>
@@ -263,12 +316,21 @@ function DatePickerModal({
 
 export default function ResultsScreen() {
   const insets = useSafeAreaInsets();
-  const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
-  const tomorrow = useMemo(() => { const d = new Date(today); d.setDate(d.getDate() + 1); return d; }, [today]);
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const tomorrow = useMemo(() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
+    return d;
+  }, [today]);
 
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [customDate, setCustomDate] = useState<Date | null>(null);
-  const [showCalendar, setShowCalendar] = useState(false);
+  const [showCalendar, setShowCalendar] = useState<boolean>(false);
+  const [teamSearch, setTeamSearch] = useState<string>('');
 
   const selectedDate = useMemo(() => {
     if (dateFilter === 'today') return today;
@@ -290,28 +352,33 @@ export default function ResultsScreen() {
   });
 
   const competitionMaps = useMemo(() => buildCompMap(competitions ?? []), [competitions]);
+  const competitionList = useMemo(() => competitions ?? ([] as CompetitionInfo[]), [competitions]);
 
   const filteredMatches = useMemo(() => {
-    if (!allMatches || !Array.isArray(allMatches)) return [];
+    if (!allMatches || !Array.isArray(allMatches)) return [] as APIMatch[];
 
-    const onlyTodayAndTomorrow = allMatches.filter((m) => {
-      const matchDate = parseMatchDate(m.date);
+    const matchesByDate = (dateFilter === 'all' ? allMatches : allMatches).filter((match) => {
+      const matchDate = parseMatchDate(match.date);
       if (!matchDate) return false;
-      return isSameDay(matchDate, today) || isSameDay(matchDate, tomorrow);
-    });
 
-    if (dateFilter === 'all') {
-      return onlyTodayAndTomorrow;
-    }
+      if (dateFilter === 'all') {
+        return isSameDay(matchDate, today) || isSameDay(matchDate, tomorrow);
+      }
 
-    if (!selectedDate) return [];
-
-    return allMatches.filter((m) => {
-      const matchDate = parseMatchDate(m.date);
-      if (!matchDate) return false;
+      if (!selectedDate) return false;
       return isSameDay(matchDate, selectedDate);
     });
-  }, [allMatches, selectedDate, dateFilter, today, tomorrow]);
+
+    const normalizedSearch = normalizeText(teamSearch);
+    if (!normalizedSearch) {
+      return matchesByDate;
+    }
+
+    return matchesByDate.filter((match) => {
+      const haystack = `${match.team1} ${match.team2}`;
+      return normalizeText(haystack).includes(normalizedSearch);
+    });
+  }, [allMatches, dateFilter, selectedDate, teamSearch, today, tomorrow]);
 
   const groupedMatches = useMemo(() => {
     const groups: Record<string, APIMatch[]> = {};
@@ -327,29 +394,34 @@ export default function ResultsScreen() {
     const mapped = Object.entries(groups).map(([competitionIdRaw, matches]): MatchesGroup => {
       const competitionId = Number(competitionIdRaw);
       const competitionName = competitionMaps.nameMap[competitionId] ?? 'Competição';
-      const sortedMatches = [...matches].sort((a, b) => {
-        const aTime = getMatchTimestamp(a.date);
-        const bTime = getMatchTimestamp(b.date);
-        return aTime - bTime;
-      });
+      const competitionLogo = competitionMaps.logoMap[competitionId];
+      const sortedMatches = [...matches].sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date));
 
       return {
         competitionId,
         competitionName,
+        competitionLogo,
         matches: sortedMatches,
       };
     });
 
-    return mapped.sort((a, b) => a.competitionName.localeCompare(b.competitionName, 'pt'));
-  }, [filteredMatches, competitionMaps.nameMap]);
+    return mapped.sort((a, b) => {
+      const compA = competitionList.find((item) => item.id === a.competitionId);
+      const compB = competitionList.find((item) => item.id === b.competitionId);
+      const orderA = compA ? getCompetitionPopularityOrder(compA) : 999;
+      const orderB = compB ? getCompetitionPopularityOrder(compB) : 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.competitionName.localeCompare(b.competitionName, 'pt');
+    });
+  }, [filteredMatches, competitionList, competitionMaps.logoMap, competitionMaps.nameMap]);
 
   const handleCalendarSelect = useCallback((date: Date) => {
-    const isToday = isSameDay(date, today);
-    const isTomorrow = isSameDay(date, tomorrow);
-    if (isToday) {
+    const isTodayDate = isSameDay(date, today);
+    const isTomorrowDate = isSameDay(date, tomorrow);
+    if (isTodayDate) {
       setDateFilter('today');
       setCustomDate(null);
-    } else if (isTomorrow) {
+    } else if (isTomorrowDate) {
       setDateFilter('tomorrow');
       setCustomDate(null);
     } else {
@@ -368,14 +440,22 @@ export default function ResultsScreen() {
   const renderCompetitionGroup = useCallback(({ item }: { item: MatchesGroup }) => (
     <View style={styles.competitionSection}>
       <View style={styles.competitionHeader}>
-        <Text style={styles.competitionTitle}>{item.competitionName}</Text>
+        <View style={styles.competitionHeaderLeft}>
+          <CompetitionLogo uri={item.competitionLogo} />
+          <Text style={styles.competitionTitle}>{item.competitionName}</Text>
+        </View>
         <Text style={styles.competitionCount}>{item.matches.length}</Text>
       </View>
 
       <View style={styles.competitionCard}>
         {item.matches.map((match, index) => (
           <View key={match.id}>
-            <MatchRow match={match} compName={item.competitionName} />
+            <MatchRow
+              match={match}
+              compName={item.competitionName}
+              competitionId={item.competitionId}
+              compLogo={item.competitionLogo}
+            />
             {index < item.matches.length - 1 && <View style={styles.matchDivider} />}
           </View>
         ))}
@@ -400,45 +480,46 @@ export default function ResultsScreen() {
       <View style={styles.filterBar}>
         <Pressable
           style={[styles.filterPill, dateFilter === 'all' && styles.filterPillActive]}
-          onPress={() => { setDateFilter('all'); setCustomDate(null); }}
+          onPress={() => {
+            setDateFilter('all');
+            setCustomDate(null);
+          }}
           testID="filter-all"
         >
-          <Text style={[styles.filterPillText, dateFilter === 'all' && styles.filterPillTextActive]}>
-            Todos
-          </Text>
+          <Text style={[styles.filterPillText, dateFilter === 'all' && styles.filterPillTextActive]}>Todos</Text>
         </Pressable>
 
         <Pressable
           style={[styles.filterPill, dateFilter === 'today' && styles.filterPillActive]}
-          onPress={() => { setDateFilter('today'); setCustomDate(null); }}
+          onPress={() => {
+            setDateFilter('today');
+            setCustomDate(null);
+          }}
           testID="filter-today"
         >
-          <Text style={[styles.filterPillText, dateFilter === 'today' && styles.filterPillTextActive]}>
-            Hoje
-          </Text>
+          <Text style={[styles.filterPillText, dateFilter === 'today' && styles.filterPillTextActive]}>Hoje</Text>
         </Pressable>
 
         <Pressable
           style={[styles.filterPill, dateFilter === 'tomorrow' && styles.filterPillActive]}
-          onPress={() => { setDateFilter('tomorrow'); setCustomDate(null); }}
+          onPress={() => {
+            setDateFilter('tomorrow');
+            setCustomDate(null);
+          }}
           testID="filter-tomorrow"
         >
-          <Text style={[styles.filterPillText, dateFilter === 'tomorrow' && styles.filterPillTextActive]}>
-            Amanhã
-          </Text>
+          <Text style={[styles.filterPillText, dateFilter === 'tomorrow' && styles.filterPillTextActive]}>Amanhã</Text>
         </Pressable>
 
-        {dateFilter === 'custom' && customDateLabel && (
+        {dateFilter === 'custom' && customDateLabel ? (
           <Pressable
             style={[styles.filterPill, styles.filterPillActive]}
             onPress={() => setShowCalendar(true)}
             testID="filter-custom"
           >
-            <Text style={[styles.filterPillText, styles.filterPillTextActive]}>
-              {customDateLabel}
-            </Text>
+            <Text style={[styles.filterPillText, styles.filterPillTextActive]}>{customDateLabel}</Text>
           </Pressable>
-        )}
+        ) : null}
 
         <Pressable
           style={[styles.calBtn, dateFilter === 'custom' && styles.calBtnActive]}
@@ -449,17 +530,33 @@ export default function ResultsScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBox}>
+          <Search size={18} color={Colors.textMuted} />
+          <TextInput
+            value={teamSearch}
+            onChangeText={setTeamSearch}
+            placeholder="Pesquisar por equipa"
+            placeholderTextColor={Colors.textMuted}
+            style={styles.searchInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+            testID="team-search-input"
+          />
+        </View>
+      </View>
+
       <View style={styles.dateLabelBar}>
         <Text style={styles.dateLabelText}>
           {dateFilter === 'all'
             ? 'Jogos de hoje e amanhã'
             : selectedDate
-            ? dateFilter === 'today'
-              ? 'Jogos de hoje'
-              : dateFilter === 'tomorrow'
-              ? 'Jogos de amanhã'
-              : `Jogos de ${formatDisplayDate(selectedDate)}`
-            : 'Jogos'}
+              ? dateFilter === 'today'
+                ? 'Jogos de hoje'
+                : dateFilter === 'tomorrow'
+                  ? 'Jogos de amanhã'
+                  : `Jogos de ${formatDisplayDate(selectedDate)}`
+              : 'Jogos'}
         </Text>
         <Text style={styles.dateLabelCount}>{filteredMatches.length} jogos</Text>
       </View>
@@ -590,6 +687,30 @@ const styles = StyleSheet.create({
   calBtnActive: {
     backgroundColor: Colors.primary,
   },
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text,
+    paddingVertical: 0,
+  },
   dateLabelBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -635,7 +756,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
   },
+  competitionHeaderLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  competitionLogo: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+  },
+  competitionLogoFallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   competitionTitle: {
+    flex: 1,
     fontSize: 13,
     fontWeight: '800' as const,
     color: Colors.text,
@@ -732,7 +873,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: Colors.textSecondary,
-    textAlign: 'center',
+    textAlign: 'center' as const,
     minWidth: 20,
   },
   winnerScore: {
@@ -776,7 +917,6 @@ const styles = StyleSheet.create({
   },
   emptyIcon: {
     fontSize: 48,
-    marginBottom: 8,
   },
   emptyTitle: {
     fontSize: 18,
@@ -786,26 +926,26 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   browseBtn: {
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 12,
     backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 12,
   },
   browseBtnText: {
     fontSize: 13,
-    fontWeight: '600' as const,
+    fontWeight: '700' as const,
     color: Colors.primary,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(13,26,18,0.25)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
@@ -816,12 +956,12 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   modalHandle: {
-    width: 36,
+    width: 42,
     height: 4,
-    borderRadius: 2,
+    borderRadius: 999,
     backgroundColor: Colors.border,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -831,16 +971,16 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700' as const,
+    fontWeight: '800' as const,
     color: Colors.text,
   },
   modalClose: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.surfaceLight,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.surfaceLight,
   },
   calendarNav: {
     flexDirection: 'row',
@@ -852,15 +992,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
   },
   calMonthLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700' as const,
     color: Colors.text,
-    textTransform: 'capitalize',
+    textTransform: 'capitalize' as const,
   },
   calWeekDays: {
     flexDirection: 'row',
@@ -868,53 +1008,56 @@ const styles = StyleSheet.create({
   },
   calWeekDay: {
     flex: 1,
-    textAlign: 'center',
+    textAlign: 'center' as const,
     fontSize: 12,
-    fontWeight: '600' as const,
+    fontWeight: '700' as const,
     color: Colors.textMuted,
   },
   calGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
+    flexWrap: 'wrap' as const,
+    marginHorizontal: -4,
   },
   calCell: {
     width: '14.2857%',
-    aspectRatio: 1,
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
   },
   calCellToday: {
-    backgroundColor: Colors.primaryLight,
+    borderRadius: 14,
   },
   calCellSelected: {
     backgroundColor: Colors.primary,
+    borderRadius: 14,
   },
   calCellText: {
+    width: 36,
+    height: 36,
+    lineHeight: 36,
+    textAlign: 'center' as const,
     fontSize: 14,
-    fontWeight: '500' as const,
     color: Colors.text,
   },
   calCellTodayText: {
     color: Colors.primary,
-    fontWeight: '700' as const,
+    fontWeight: '800' as const,
   },
   calCellSelectedText: {
     color: '#FFFFFF',
-    fontWeight: '700' as const,
+    fontWeight: '800' as const,
   },
   quickDates: {
     flexDirection: 'row',
     gap: 10,
+    paddingTop: 18,
   },
   quickDateBtn: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
+    backgroundColor: Colors.primaryLight,
     borderRadius: 12,
-    backgroundColor: Colors.surfaceLight,
+    paddingVertical: 12,
+    alignItems: 'center',
   },
   quickDateText: {
     fontSize: 13,

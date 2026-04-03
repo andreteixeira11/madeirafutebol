@@ -9,7 +9,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#FFFFFF',
-        tabBarInactiveTintColor: 'rgba(255,255,255,0.7)',
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.72)',
         tabBarStyle: {
           backgroundColor: Colors.tabBar,
           borderTopColor: Colors.tabBarBorder,
@@ -19,10 +19,20 @@ export default function TabLayout() {
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.06,
           shadowRadius: 8,
+          paddingTop: 6,
+        },
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingVertical: 4,
+        },
+        tabBarIconStyle: {
+          marginBottom: 2,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600' as const,
+          marginTop: 0,
         },
       }}
     >

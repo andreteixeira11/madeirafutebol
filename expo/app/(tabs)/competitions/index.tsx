@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -9,23 +9,36 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Trophy, ChevronRight } from 'lucide-react-native';
+import { Trophy, ChevronRight, Search } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
-import { FEATURED_COMPETITIONS } from '@/types/football';
-import { fetchCompetitionsLogos, CompetitionInfo } from '@/utils/scores';
+import { COMPETITION_CATEGORIES } from '@/types/football';
+import {
+  fetchCompetitionsLogos,
+  CompetitionInfo,
+  getCompetitionCategory,
+  getCompetitionPopularityOrder,
+  getCompetitionShortName,
+} from '@/utils/scores';
 
-const FEATURED_MAP = new Map(FEATURED_COMPETITIONS.map(c => [c.id, c]));
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 function CompLogo({ uri, size = 36 }: { uri?: string; size?: number }) {
   if (uri) {
     return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: 8 }} resizeMode="contain" />;
   }
   return (
-    <View style={[styles.compIconFallback, { width: size, height: size, borderRadius: size * 0.3 }]}>
+    <View style={[styles.compIconFallback, { width: size, height: size, borderRadius: size * 0.3 }]}> 
       <Trophy size={size * 0.5} color={Colors.primary} />
     </View>
   );
@@ -57,7 +70,7 @@ const CompetitionRow = React.memo(function CompetitionRow({
 
   return (
     <Pressable onPress={handlePress} onPressIn={onPressIn} onPressOut={onPressOut} testID={`comp-${competition.id}`}>
-      <Animated.View style={[styles.compCard, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.compCard, { transform: [{ scale: scaleAnim }] }]}> 
         <CompLogo uri={competition.logo} size={40} />
         <View style={styles.compInfo}>
           <Text style={styles.compName} numberOfLines={1}>{shortName}</Text>
@@ -69,8 +82,15 @@ const CompetitionRow = React.memo(function CompetitionRow({
   );
 });
 
+interface CompetitionSection {
+  key: string;
+  title: string;
+  items: CompetitionInfo[];
+}
+
 export default function CompetitionsScreen() {
   const insets = useSafeAreaInsets();
+  const [search, setSearch] = useState<string>('');
 
   const { data: competitions, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ['api-competitions-logos'],
@@ -79,18 +99,45 @@ export default function CompetitionsScreen() {
   });
 
   const filteredCompetitions = useMemo(() => {
-    if (!competitions) return [];
-    return [...competitions].sort((a, b) => {
-      const orderA = FEATURED_MAP.get(a.id)?.order ?? 999;
-      const orderB = FEATURED_MAP.get(b.id)?.order ?? 999;
-      if (orderA !== orderB) return orderA - orderB;
-      return a.title.localeCompare(b.title, 'pt');
+    if (!competitions) return [] as CompetitionInfo[];
+
+    const normalizedSearch = normalizeText(search);
+
+    return [...competitions]
+      .filter((competition) => {
+        if (!normalizedSearch) return true;
+        const shortName = getCompetitionShortName(competition);
+        const haystack = [competition.title, shortName].map(normalizeText).join(' ');
+        return haystack.includes(normalizedSearch);
+      })
+      .sort((a, b) => {
+        const orderA = getCompetitionPopularityOrder(a);
+        const orderB = getCompetitionPopularityOrder(b);
+        if (orderA !== orderB) return orderA - orderB;
+        return a.title.localeCompare(b.title, 'pt');
+      });
+  }, [competitions, search]);
+
+  const sections = useMemo(() => {
+    const sectionMap = new Map<string, CompetitionInfo[]>();
+
+    filteredCompetitions.forEach((competition) => {
+      const category = getCompetitionCategory(competition);
+      const bucket = sectionMap.get(category) ?? [];
+      bucket.push(competition);
+      sectionMap.set(category, bucket);
     });
-  }, [competitions]);
+
+    return COMPETITION_CATEGORIES.map((category): CompetitionSection => ({
+      key: category.key,
+      title: category.title,
+      items: sectionMap.get(category.key) ?? [],
+    })).filter((section) => section.items.length > 0);
+  }, [filteredCompetitions]);
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top }]}> 
         <View style={styles.header}>
           <Trophy size={22} color={Colors.primary} />
           <View>
@@ -108,7 +155,7 @@ export default function CompetitionsScreen() {
 
   if (error) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top }]}> 
         <View style={styles.header}>
           <Trophy size={22} color={Colors.primary} />
           <View>
@@ -128,12 +175,28 @@ export default function CompetitionsScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}> 
       <View style={styles.header}>
         <Trophy size={22} color={Colors.primary} />
         <View>
           <Text style={styles.headerTitle}>Competições</Text>
-          <Text style={styles.headerSubtitle}>Futebol da Madeira</Text>
+          <Text style={styles.headerSubtitle}>Da mais popular à menos popular</Text>
+        </View>
+      </View>
+
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBox}>
+          <Search size={18} color={Colors.textMuted} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Pesquisar competição"
+            placeholderTextColor={Colors.textMuted}
+            style={styles.searchInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+            testID="competition-search-input"
+          />
         </View>
       </View>
 
@@ -149,23 +212,28 @@ export default function CompetitionsScreen() {
           />
         }
       >
-        {filteredCompetitions.length === 0 ? (
+        {sections.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🏆</Text>
             <Text style={styles.emptyTitle}>Sem competições</Text>
-            <Text style={styles.emptySubtitle}>Nenhuma competição encontrada</Text>
+            <Text style={styles.emptySubtitle}>Nenhuma competição encontrada para a sua pesquisa</Text>
           </View>
         ) : (
-          filteredCompetitions.map(comp => {
-            const featured = FEATURED_MAP.get(comp.id);
-            return (
-              <CompetitionRow
-                key={comp.id}
-                competition={comp}
-                shortName={featured?.shortName ?? comp.title}
-              />
-            );
-          })
+          sections.map((section) => (
+            <View key={section.key} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <Text style={styles.sectionCount}>{section.items.length}</Text>
+              </View>
+              {section.items.map((comp) => (
+                <CompetitionRow
+                  key={comp.id}
+                  competition={comp}
+                  shortName={getCompetitionShortName(comp)}
+                />
+              ))}
+            </View>
+          ))
         )}
 
         <View style={styles.footer}>
@@ -203,6 +271,30 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 1,
   },
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text,
+    paddingVertical: 0,
+  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -232,7 +324,7 @@ const styles = StyleSheet.create({
   errorSubtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
-    textAlign: 'center',
+    textAlign: 'center' as const,
     marginBottom: 20,
   },
   retryBtn: {
@@ -249,6 +341,32 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 10,
     paddingBottom: 30,
+  },
+  section: {
+    marginBottom: 14,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '800' as const,
+    color: Colors.text,
+  },
+  sectionCount: {
+    minWidth: 24,
+    textAlign: 'center' as const,
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
   compCard: {
     flexDirection: 'row',
@@ -304,7 +422,7 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: 14,
     color: Colors.textSecondary,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   footer: {
     alignItems: 'center',

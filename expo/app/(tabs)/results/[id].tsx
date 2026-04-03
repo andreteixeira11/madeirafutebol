@@ -6,13 +6,15 @@ import {
   ScrollView,
   Image,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Clock, MapPin } from 'lucide-react-native';
+import { ArrowLeft, Clock, MapPin, Trophy } from 'lucide-react-native';
+import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { APIMatch } from '@/types/football';
-import { extractScore, isMatchFinished, isMatchLive } from '@/utils/scores';
+import { extractScore, isMatchFinished, isMatchLive, fetchCompetitionStandings } from '@/utils/scores';
 
 function formatFullDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -49,9 +51,20 @@ function TeamLogo({ uri, fallback, size = 52 }: { uri?: string; fallback: string
   );
 }
 
+function CompetitionLogo({ uri }: { uri?: string }) {
+  if (uri) {
+    return <Image source={{ uri }} style={styles.competitionLogo} resizeMode="contain" />;
+  }
+  return (
+    <View style={styles.competitionLogoFallback}>
+      <Trophy size={16} color={Colors.primary} />
+    </View>
+  );
+}
+
 export default function MatchDetailScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ id: string; matchData?: string; compName?: string }>();
+  const params = useLocalSearchParams<{ id: string; matchData?: string; compName?: string; competitionId?: string; compLogo?: string }>();
 
   const match: APIMatch | null = useMemo(() => {
     if (params.matchData) {
@@ -65,11 +78,20 @@ export default function MatchDetailScreen() {
   }, [params.matchData]);
 
   const compName = params.compName || '';
+  const compLogo = params.compLogo;
+  const competitionId = Number(params.competitionId ?? match?.competition_id ?? 0);
   const goBack = useCallback(() => router.back(), []);
+
+  const { data: standings, isLoading: standingsLoading } = useQuery({
+    queryKey: ['competition-standings', competitionId],
+    queryFn: () => fetchCompetitionStandings(competitionId),
+    enabled: competitionId > 0,
+    staleTime: 60 * 1000,
+  });
 
   if (!match) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={[styles.container, { paddingTop: insets.top }]}> 
         <View style={styles.topBar}>
           <Pressable onPress={goBack} style={styles.backBtn}>
             <ArrowLeft size={22} color={Colors.text} />
@@ -89,7 +111,7 @@ export default function MatchDetailScreen() {
   const awayWin = score ? score.away > score.home : match.winner_team_id === match.team2_id;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}> 
       <View style={styles.topBar}>
         <Pressable onPress={goBack} style={styles.backBtn} testID="back-btn">
           <ArrowLeft size={22} color={Colors.text} />
@@ -100,16 +122,19 @@ export default function MatchDetailScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.matchCard}>
-          {isLive && (
+          <View style={styles.competitionBadge}>
+            <CompetitionLogo uri={compLogo} />
+            <Text style={styles.competitionBadgeText} numberOfLines={1}>{compName || 'Competição'}</Text>
+          </View>
+
+          {isLive ? (
             <View style={styles.liveIndicator}>
               <View style={styles.liveDot} />
               <Text style={styles.liveLabel}>{match.playtime || 'AO VIVO'}</Text>
             </View>
-          )}
-          {finished && !isLive && (
+          ) : finished ? (
             <Text style={styles.statusLabel}>Resultado Final</Text>
-          )}
-          {!finished && !isLive && (
+          ) : (
             <Text style={styles.statusLabel}>Por jogar</Text>
           )}
 
@@ -152,6 +177,53 @@ export default function MatchDetailScreen() {
             </View>
           </View>
         </View>
+
+        <View style={styles.standingsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Classificação</Text>
+            <Text style={styles.sectionSubtitle}>Da competição deste jogo</Text>
+          </View>
+
+          {standingsLoading ? (
+            <View style={styles.standingsLoading}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.standingsLoadingText}>A carregar classificação...</Text>
+            </View>
+          ) : !standings || standings.length === 0 ? (
+            <View style={styles.standingsEmpty}>
+              <Text style={styles.standingsEmptyText}>Classificação indisponível.</Text>
+            </View>
+          ) : (
+            <View style={styles.standingsCard}>
+              <View style={styles.standingsHeaderRow}>
+                <Text style={[styles.stHeaderText, { width: 28, textAlign: 'center' as const }]}>#</Text>
+                <Text style={[styles.stHeaderText, { flex: 1 }]}>Equipa</Text>
+                <Text style={[styles.stHeaderText, styles.stCol]}>J</Text>
+                <Text style={[styles.stHeaderText, styles.stCol]}>DG</Text>
+                <Text style={[styles.stHeaderText, styles.stColPts]}>Pts</Text>
+              </View>
+              {standings.map((row, idx) => (
+                <View key={row.teamId} style={[styles.stRow, idx % 2 === 0 && styles.stRowAlt]}>
+                  <Text style={[styles.stPos, idx < 3 && styles.stPosTop]}>{idx + 1}</Text>
+                  <View style={styles.stTeam}>
+                    <TeamLogo uri={row.teamLogo} fallback={row.teamName} size={18} />
+                    <Text style={styles.stTeamName} numberOfLines={1}>{row.teamName}</Text>
+                  </View>
+                  <Text style={[styles.stStat, styles.stCol]}>{row.played}</Text>
+                  <Text style={[
+                    styles.stStat,
+                    styles.stCol,
+                    row.goalDifference > 0 && styles.stPositive,
+                    row.goalDifference < 0 && styles.stNegative,
+                  ]}>
+                    {row.goalDifference > 0 ? '+' : ''}{row.goalDifference}
+                  </Text>
+                  <Text style={[styles.stPts, styles.stColPts]}>{row.points}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -184,7 +256,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700' as const,
     color: Colors.text,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   centerContainer: {
     flex: 1,
@@ -212,6 +284,36 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  competitionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surfaceLight,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginBottom: 16,
+    maxWidth: '100%',
+  },
+  competitionLogo: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+  },
+  competitionLogoFallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+  },
+  competitionBadgeText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    flexShrink: 1,
+  },
   liveIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -238,7 +340,7 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: Colors.textMuted,
     marginBottom: 16,
-    textTransform: 'uppercase',
+    textTransform: 'uppercase' as const,
     letterSpacing: 0.5,
   },
   matchupRow: {
@@ -256,7 +358,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600' as const,
     color: Colors.text,
-    textAlign: 'center',
+    textAlign: 'center' as const,
     lineHeight: 17,
   },
   winnerText: {
@@ -296,7 +398,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 20,
-    flexWrap: 'wrap',
+    flexWrap: 'wrap' as const,
     justifyContent: 'center',
   },
   infoChip: {
@@ -312,5 +414,119 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     fontWeight: '500' as const,
+  },
+  standingsSection: {
+    marginTop: 16,
+    marginHorizontal: 12,
+  },
+  sectionHeader: {
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800' as const,
+    color: Colors.text,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  standingsLoading: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  standingsLoadingText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  standingsEmpty: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 18,
+  },
+  standingsEmptyText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  standingsCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  standingsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    backgroundColor: Colors.surfaceLight,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  stHeaderText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: Colors.textMuted,
+    textTransform: 'uppercase' as const,
+  },
+  stRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+  },
+  stRowAlt: {
+    backgroundColor: '#FAFCFA',
+  },
+  stPos: {
+    width: 28,
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: Colors.textSecondary,
+    textAlign: 'center' as const,
+  },
+  stPosTop: {
+    color: Colors.primary,
+  },
+  stTeam: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stTeamName: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  stCol: {
+    width: 36,
+    textAlign: 'center' as const,
+  },
+  stColPts: {
+    width: 40,
+    textAlign: 'center' as const,
+  },
+  stStat: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600' as const,
+  },
+  stPts: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '800' as const,
+  },
+  stPositive: {
+    color: Colors.win,
+  },
+  stNegative: {
+    color: Colors.loss,
   },
 });

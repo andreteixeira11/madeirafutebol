@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { APIMatch, APICompetitionDetail } from '@/types/football';
+import { APIMatch, APICompetitionDetail, FEATURED_COMPETITIONS, StandingRow, COMPETITION_CATEGORIES } from '@/types/football';
 
 export interface CompetitionInfo {
   id: number;
@@ -133,6 +133,14 @@ function getSafeString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 interface ApiRoundInfo {
   id?: number;
   name?: string;
@@ -159,6 +167,78 @@ interface ApiStandingPayload {
   goal_difference?: number;
   goal_diff?: number;
   team_id?: string | number;
+}
+
+export function mapStandingsPayload(raw: unknown): StandingRow[] {
+  if (!Array.isArray(raw)) return [];
+
+  const rows = raw.map((item, index) => {
+    const row = item as ApiStandingPayload & { draw?: number };
+    const played = Number(row.played ?? 0);
+    const won = Number(row.won ?? row.wins ?? 0);
+    const drawn = Number(row.drawn ?? row.draws ?? row.draw ?? 0);
+    const lost = Number(row.lost ?? row.losses ?? 0);
+    const goalsFor = Number(row.goals_for ?? row.gf ?? 0);
+    const goalsAgainst = Number(row.goals_against ?? row.ga ?? 0);
+    const goalDifference = Number(row.goal_difference ?? row.goal_diff ?? row.gd ?? (goalsFor - goalsAgainst));
+    const points = Number(row.points ?? 0);
+    const teamName = String(row.team_name ?? row.team ?? `Equipa ${index + 1}`);
+    const teamId = String(row.team_id ?? teamName);
+
+    return {
+      teamId,
+      teamName,
+      teamLogo: String(row.team_logo ?? ''),
+      played,
+      won,
+      drawn,
+      lost,
+      goalsFor,
+      goalsAgainst,
+      goalDifference,
+      points,
+    };
+  });
+
+  return rows.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+}
+
+function getFeaturedCompetitionMeta(competition: CompetitionInfo): { order: number; shortName: string; category: string } {
+  const normalizedTitle = normalizeText(competition.title);
+  const matched = FEATURED_COMPETITIONS.find((item) => {
+    if (typeof item.id === 'number' && item.id === competition.id) {
+      return true;
+    }
+    return item.aliases.some((alias) => normalizedTitle.includes(normalizeText(alias)));
+  });
+
+  if (matched) {
+    return {
+      order: matched.order,
+      shortName: matched.shortName,
+      category: matched.category,
+    };
+  }
+
+  const fallbackCategory = COMPETITION_CATEGORIES.find((item) => item.aliases.some((alias) => normalizedTitle.includes(normalizeText(alias))));
+
+  return {
+    order: 999,
+    shortName: competition.title,
+    category: fallbackCategory?.key ?? 'outras',
+  };
+}
+
+export function getCompetitionCategory(competition: CompetitionInfo): string {
+  return getFeaturedCompetitionMeta(competition).category;
+}
+
+export function getCompetitionShortName(competition: CompetitionInfo): string {
+  return getFeaturedCompetitionMeta(competition).shortName;
+}
+
+export function getCompetitionPopularityOrder(competition: CompetitionInfo): number {
+  return getFeaturedCompetitionMeta(competition).order;
 }
 
 export async function fetchCompetitionsLogos(): Promise<CompetitionInfo[]> {
@@ -270,6 +350,11 @@ export async function fetchAllMatchesMerged(): Promise<APIMatch[]> {
   return dedupeMatches([...results, ...fixtures]);
 }
 
+export async function fetchCompetitionStandings(competitionId: number): Promise<StandingRow[]> {
+  const standingsRaw = await fetchApiJson<unknown>(`/competition/${competitionId}/standings`);
+  return mapStandingsPayload(standingsRaw);
+}
+
 export async function fetchCompetitionDetail(competitionId: number, matchday?: number): Promise<APICompetitionDetail> {
   const query = matchday ? `&matchday=${matchday}` : '';
 
@@ -310,11 +395,12 @@ export async function fetchCompetitionDetail(competitionId: number, matchday?: n
   matches.forEach((match) => {
     const matchdayValue = Number(match.matchday ?? match.round_id ?? 0);
     const resolvedMatchday = Number.isNaN(matchdayValue) ? 0 : matchdayValue;
+    const fallbackRoundId = match.round_id ?? resolvedMatchday || '';
     const enrichedMatch: APIMatch = {
       ...match,
       competition_id: Number(match.competition_id ?? competitionId),
       matchday: resolvedMatchday,
-      round_id: String(match.round_id ?? resolvedMatchday ?? ''),
+      round_id: String(fallbackRoundId),
       title: match.title ?? `${match.team1} x ${match.team2}`,
       result_final: match.result_final ?? match.score ?? null,
     };
