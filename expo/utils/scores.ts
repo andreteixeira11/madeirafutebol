@@ -14,17 +14,21 @@ const DEFAULT_API_BASES = [
 ] as const;
 
 const envApiBase = process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.trim() ?? '';
-const API_BASES = [envApiBase, ...DEFAULT_API_BASES].filter((value, index, array) => value.length > 0 && array.indexOf(value) === index);
+const API_BASES = [envApiBase, ...DEFAULT_API_BASES].filter(
+  (value, index, array) => value.length > 0 && array.indexOf(value) === index
+);
 
-const API_HEADERS: Record<string, string> = Platform.OS === 'web'
-  ? {
-    Accept: 'application/json',
-  }
-  : {
-    Accept: 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-    Referer: 'https://www.sofascore.com/',
-  };
+const API_HEADERS: Record<string, string> =
+  Platform.OS === 'web'
+    ? {
+        Accept: 'application/json',
+      }
+    : {
+        Accept: 'application/json',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+        Referer: 'https://www.sofascore.com/',
+      };
 
 function parseApiDate(dateValue: string | null | undefined): Date | null {
   if (!dateValue || typeof dateValue !== 'string') return null;
@@ -32,13 +36,17 @@ function parseApiDate(dateValue: string | null | undefined): Date | null {
   const raw = dateValue.trim();
   if (!raw) return null;
 
-  const isoCandidate = raw.includes(' ') && !raw.includes('T') ? raw.replace(' ', 'T') : raw;
+  const isoCandidate =
+    raw.includes(' ') && !raw.includes('T') ? raw.replace(' ', 'T') : raw;
+
   const isoDate = new Date(isoCandidate);
   if (!Number.isNaN(isoDate.getTime())) {
     return isoDate;
   }
 
-  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  const match = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/
+  );
   if (!match) return null;
 
   const year = Number(match[1]);
@@ -50,6 +58,7 @@ function parseApiDate(dateValue: string | null | undefined): Date | null {
 
   const localDate = new Date(year, month, day, hour, minute, second);
   if (Number.isNaN(localDate.getTime())) return null;
+
   return localDate;
 }
 
@@ -80,9 +89,10 @@ async function fetchApiJson<T>(path: string): Promise<T> {
         continue;
       }
 
-      return response.json() as Promise<T>;
+      return (await response.json()) as T;
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error('Unknown request error');
+      lastError =
+        error instanceof Error ? error : new Error('Unknown request error');
     }
   }
 
@@ -105,12 +115,19 @@ function normalizeMatchesPayload(raw: unknown): APIMatch[] {
 
 function dedupeMatches(matches: APIMatch[]): APIMatch[] {
   const uniqueMatches = new Map<number, APIMatch>();
-  matches.forEach((match) => uniqueMatches.set(Number(match.id), match));
+  matches.forEach((match) =>
+    uniqueMatches.set(Number(match.id), match)
+  );
   return Array.from(uniqueMatches.values());
 }
 
-export async function fetchCompetitionDetail(competitionId: number): Promise<APICompetitionDetail> {
-  const raw = await fetchApiJson<unknown>(`/matches?competition_id=${competitionId}`);
+export async function fetchCompetitionDetail(
+  competitionId: number
+): Promise<APICompetitionDetail> {
+  const raw = await fetchApiJson<unknown>(
+    `/matches?competition_id=${competitionId}`
+  );
+
   const matches = dedupeMatches(normalizeMatchesPayload(raw));
 
   const matchdayMap = new Map<number, APIMatch[]>();
@@ -119,8 +136,10 @@ export async function fetchCompetitionDetail(competitionId: number): Promise<API
     const matchdayValue = Number(match.matchday ?? match.round_id ?? 0);
     const resolvedMatchday = Number.isNaN(matchdayValue) ? 0 : matchdayValue;
 
-    // ✅ CORREÇÃO CERTA (não quebra jogos)
-    const fallbackRoundId = match.round_id ?? (resolvedMatchday !== 0 ? resolvedMatchday : '');
+    // ✅ CORREÇÃO SEGURA
+    const fallbackRoundId =
+      match.round_id ??
+      (resolvedMatchday !== 0 ? resolvedMatchday : '');
 
     const enrichedMatch: APIMatch = {
       ...match,
@@ -133,10 +152,12 @@ export async function fetchCompetitionDetail(competitionId: number): Promise<API
     matchdayMap.set(resolvedMatchday, bucket);
   });
 
-  const matchdays = Array.from(matchdayMap.entries()).map(([matchday, matches]) => ({
-    matchday,
-    matches,
-  }));
+  const matchdays = Array.from(matchdayMap.entries()).map(
+    ([matchday, matches]) => ({
+      matchday,
+      matches,
+    })
+  );
 
   return {
     competition: { id: competitionId, name: '', logo: '' },
