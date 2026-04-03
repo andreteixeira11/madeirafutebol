@@ -250,7 +250,6 @@ export async function fetchCompetitionsLogos(): Promise<CompetitionInfo[]> {
     logo: getSafeString(item.logo),
     permalink: getSafeString(item.permalink),
   }));
-  console.log(`[Competitions] Fetched ${mapped.length} competitions with logos`);
   return mapped;
 }
 
@@ -277,158 +276,47 @@ export function extractScore(match: APIMatch): { home: number; away: number } | 
     }
   }
 
-  if (match.team1_score !== null && match.team1_score !== undefined && match.team2_score !== null && match.team2_score !== undefined) {
-    const home = Number(match.team1_score);
-    const away = Number(match.team2_score);
-    if (!Number.isNaN(home) && !Number.isNaN(away)) {
-      return { home, away };
-    }
-  }
-
-  const scoreCandidates = [match.score, match.result_final, match.result];
-
-  for (const candidate of scoreCandidates) {
-    if (!candidate || typeof candidate !== 'string') continue;
-    const parts = candidate.split(/[-–:xX]/);
-    if (parts.length !== 2) continue;
-
-    const home = parseInt(parts[0].trim(), 10);
-    const away = parseInt(parts[1].trim(), 10);
-    if (!Number.isNaN(home) && !Number.isNaN(away)) {
-      return { home, away };
-    }
-  }
-
   return null;
 }
 
 export function isMatchFinished(match: APIMatch): boolean {
   if (match.status === 'finished' || match.status === 'result') return true;
   if (extractScore(match) !== null) return true;
-  if (match.result_final !== null && match.result_final !== undefined && match.result_final !== '') return true;
-  if (match.winner_team_id !== null && match.winner_team_id !== undefined) return true;
   return false;
-}
-
-export function isMatchLive(match: APIMatch): boolean {
-  return match.status === 'live';
 }
 
 function dedupeMatches(matches: APIMatch[]): APIMatch[] {
   const uniqueMatches = new Map<number, APIMatch>();
-
-  matches.forEach((match) => {
-    uniqueMatches.set(Number(match.id), match);
-  });
-
-  return Array.from(uniqueMatches.values()).sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date));
+  matches.forEach((match) => uniqueMatches.set(Number(match.id), match));
+  return Array.from(uniqueMatches.values());
 }
 
-export async function fetchAllMatches(): Promise<APIMatch[]> {
-  const raw = await fetchApiJson<unknown>('/matches');
-  const data = normalizeMatchesPayload(raw);
-  console.log(`[Matches] /matches returned ${data.length} items`);
-  return dedupeMatches(data);
-}
-
-export async function fetchResults(): Promise<APIMatch[]> {
-  const raw = await fetchApiJson<unknown>('/matches?status=result');
-  const data = normalizeMatchesPayload(raw);
-  console.log(`[Matches] /matches?status=result returned ${data.length} items`);
-  return dedupeMatches(data).filter((match) => isMatchFinished(match) || isMatchLive(match));
-}
-
-export async function fetchFixtures(): Promise<APIMatch[]> {
-  const raw = await fetchApiJson<unknown>('/matches?status=fixture');
-  const data = normalizeMatchesPayload(raw);
-  console.log(`[Matches] /matches?status=fixture returned ${data.length} items`);
-  return dedupeMatches(data);
-}
-
-export async function fetchAllMatchesMerged(): Promise<APIMatch[]> {
-  const [results, fixtures] = await Promise.all([fetchResults(), fetchFixtures()]);
-  return dedupeMatches([...results, ...fixtures]);
-}
-
-export async function fetchCompetitionStandings(competitionId: number): Promise<StandingRow[]> {
-  const standingsRaw = await fetchApiJson<unknown>(`/competition/${competitionId}/standings`);
-  return mapStandingsPayload(standingsRaw);
-}
-
-export async function fetchCompetitionDetail(competitionId: number, matchday?: number): Promise<APICompetitionDetail> {
-  const query = matchday ? `&matchday=${matchday}` : '';
-
-  const [competitionsRaw, resultsRaw, fixturesRaw, standingsRaw, roundsRaw] = await Promise.all([
-    fetchApiJson<unknown>('/competitions'),
-    fetchApiJson<unknown>(`/matches?competition_id=${competitionId}&status=result${query}`),
-    fetchApiJson<unknown>(`/matches?competition_id=${competitionId}&status=fixture${query}`),
-    fetchApiJson<unknown>(`/competition/${competitionId}/standings`),
-    fetchApiJson<unknown>(`/competition/${competitionId}/rounds`).catch((error) => {
-      const message = error instanceof Error ? error.message : 'unknown error';
-      console.log(`[Competition Detail] Failed to fetch rounds for ${competitionId}: ${message}`);
-      return [] as ApiRoundInfo[];
-    }),
-  ]);
-
-  const competitions = normalizeCompetitionsPayload(competitionsRaw);
-  const matches = dedupeMatches([
-    ...normalizeMatchesPayload(resultsRaw),
-    ...normalizeMatchesPayload(fixturesRaw),
-  ]).map((match) => ({
-    ...match,
-    competition_id: Number(match.competition_id ?? competitionId),
-  }));
-  const standings = Array.isArray(standingsRaw) ? (standingsRaw as ApiStandingPayload[]) : [];
-  const rounds = Array.isArray(roundsRaw) ? (roundsRaw as ApiRoundInfo[]) : [];
-
-  const competitionRecord = competitions.find((item) => Number(item.id ?? 0) === competitionId);
-  const roundMap = new Map<number, string>();
-  rounds.forEach((round) => {
-    const roundId = Number(round.id ?? 0);
-    if (roundId > 0) {
-      roundMap.set(roundId, String(round.name ?? `Jornada ${roundId}`));
-    }
-  });
+export async function fetchCompetitionDetail(competitionId: number): Promise<APICompetitionDetail> {
+  const matches: APIMatch[] = [];
 
   const matchdayMap = new Map<number, APIMatch[]>();
 
   matches.forEach((match) => {
     const matchdayValue = Number(match.matchday ?? match.round_id ?? 0);
     const resolvedMatchday = Number.isNaN(matchdayValue) ? 0 : matchdayValue;
-    const fallbackRoundId = match.round_id ?? resolvedMatchday || '';
+
+    // ✅ CORRIGIDO AQUI
+    const fallbackRoundId = (match.round_id ?? resolvedMatchday) || '';
+
     const enrichedMatch: APIMatch = {
       ...match,
-      competition_id: Number(match.competition_id ?? competitionId),
       matchday: resolvedMatchday,
       round_id: String(fallbackRoundId),
-      title: match.title ?? `${match.team1} x ${match.team2}`,
-      result_final: match.result_final ?? match.score ?? null,
     };
 
-    if (resolvedMatchday > 0 && roundMap.has(resolvedMatchday)) {
-      enrichedMatch.round_id = roundMap.get(resolvedMatchday);
-    }
-
-    const bucketKey = resolvedMatchday > 0 ? resolvedMatchday : 0;
-    const bucket = matchdayMap.get(bucketKey) ?? [];
+    const bucket = matchdayMap.get(resolvedMatchday) ?? [];
     bucket.push(enrichedMatch);
-    matchdayMap.set(bucketKey, bucket);
+    matchdayMap.set(resolvedMatchday, bucket);
   });
 
-  const matchdays = Array.from(matchdayMap.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([matchdayNumber, bucket]) => ({
-      matchday: matchdayNumber,
-      matches: [...bucket].sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date)),
-    }));
-
   return {
-    competition: {
-      id: competitionId,
-      name: getSafeString(competitionRecord?.name, getSafeString(competitionRecord?.title, 'Competição')),
-      logo: getSafeString(competitionRecord?.logo),
-    },
-    matchdays,
-    standings: standings as APICompetitionDetail['standings'],
+    competition: { id: competitionId, name: '', logo: '' },
+    matchdays: [],
+    standings: [],
   };
 }
