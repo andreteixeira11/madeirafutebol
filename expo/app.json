@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "org.reactjs.native.example.madeirafutebol"
+      "bundleIdentifier": "org.reactjs.native.example.madeirafutebol",
       "buildNumber": "2"
     },
     "android": {
