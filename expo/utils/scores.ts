@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { APIMatch, APICompetitionDetail } from '@/types/football';
 
 export interface CompetitionInfo {
@@ -7,13 +8,23 @@ export interface CompetitionInfo {
   permalink: string;
 }
 
-const API_BASE = process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.trim() || 'https://www.madeirafutebol.com/wp-json/mf/v3';
+const DEFAULT_API_BASES = [
+  'https://madeirafutebol.com/wp-json/mf/v3',
+  'https://www.madeirafutebol.com/wp-json/mf/v3',
+] as const;
 
-const API_HEADERS: Record<string, string> = {
-  Accept: 'application/json',
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-  Referer: 'https://www.sofascore.com/',
-};
+const envApiBase = process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.trim() ?? '';
+const API_BASES = [envApiBase, ...DEFAULT_API_BASES].filter((value, index, array) => value.length > 0 && array.indexOf(value) === index);
+
+const API_HEADERS: Record<string, string> = Platform.OS === 'web'
+  ? {
+    Accept: 'application/json',
+  }
+  : {
+    Accept: 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+    Referer: 'https://www.sofascore.com/',
+  };
 
 function parseApiDate(dateValue: string | null | undefined): Date | null {
   if (!dateValue || typeof dateValue !== 'string') return null;
@@ -52,20 +63,33 @@ export function parseMatchDate(dateValue: string | null | undefined): Date | nul
 }
 
 async function fetchApiJson<T>(path: string): Promise<T> {
-  const url = `${API_BASE}${path}`;
-  console.log(`[API] Fetching ${url}`);
+  let lastError: Error | null = null;
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: API_HEADERS,
-  });
+  for (const baseUrl of API_BASES) {
+    const url = `${baseUrl}${path}`;
+    console.log(`[API] Fetching ${url}`);
 
-  if (!response.ok) {
-    console.log(`[API] Request failed for ${url} with status ${response.status}`);
-    throw new Error(`Failed to fetch ${path}: ${response.status}`);
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: API_HEADERS,
+      });
+
+      if (!response.ok) {
+        console.log(`[API] Request failed for ${url} with status ${response.status}`);
+        lastError = new Error(`Failed to fetch ${path}: ${response.status}`);
+        continue;
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error('Unknown request error');
+      console.log(`[API] Request exception for ${url}: ${normalizedError.message}`);
+      lastError = normalizedError;
+    }
   }
 
-  return response.json() as Promise<T>;
+  throw lastError ?? new Error(`Failed to fetch ${path}`);
 }
 
 function normalizeCompetitionsPayload(raw: unknown): Record<string, unknown>[] {
@@ -210,34 +234,62 @@ export function isMatchLive(match: APIMatch): boolean {
   return match.status === 'live';
 }
 
+function dedupeMatches(matches: APIMatch[]): APIMatch[] {
+  const uniqueMatches = new Map<number, APIMatch>();
+
+  matches.forEach((match) => {
+    uniqueMatches.set(Number(match.id), match);
+  });
+
+  return Array.from(uniqueMatches.values()).sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date));
+}
+
 export async function fetchAllMatches(): Promise<APIMatch[]> {
   const raw = await fetchApiJson<unknown>('/matches');
   const data = normalizeMatchesPayload(raw);
   console.log(`[Matches] /matches returned ${data.length} items`);
-  return data.sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date));
+  return dedupeMatches(data);
 }
 
 export async function fetchResults(): Promise<APIMatch[]> {
-  const data = await fetchAllMatches();
-  return data.filter((match) => isMatchFinished(match) || isMatchLive(match));
+  const raw = await fetchApiJson<unknown>('/matches?status=result');
+  const data = normalizeMatchesPayload(raw);
+  console.log(`[Matches] /matches?status=result returned ${data.length} items`);
+  return dedupeMatches(data).filter((match) => isMatchFinished(match) || isMatchLive(match));
+}
+
+export async function fetchFixtures(): Promise<APIMatch[]> {
+  const raw = await fetchApiJson<unknown>('/matches?status=fixture');
+  const data = normalizeMatchesPayload(raw);
+  console.log(`[Matches] /matches?status=fixture returned ${data.length} items`);
+  return dedupeMatches(data);
 }
 
 export async function fetchAllMatchesMerged(): Promise<APIMatch[]> {
-  return fetchAllMatches();
+  const [results, fixtures] = await Promise.all([fetchResults(), fetchFixtures()]);
+  return dedupeMatches([...results, ...fixtures]);
 }
 
 export async function fetchCompetitionDetail(competitionId: number, matchday?: number): Promise<APICompetitionDetail> {
   const query = matchday ? `&matchday=${matchday}` : '';
 
-  const [competitionsRaw, matchesRaw, standingsRaw, roundsRaw] = await Promise.all([
+  const [competitionsRaw, resultsRaw, fixturesRaw, standingsRaw, roundsRaw] = await Promise.all([
     fetchApiJson<unknown>('/competitions'),
-    fetchApiJson<unknown>(`/matches?competition_id=${competitionId}${query}`),
+    fetchApiJson<unknown>(`/matches?competition_id=${competitionId}&status=result${query}`),
+    fetchApiJson<unknown>(`/matches?competition_id=${competitionId}&status=fixture${query}`),
     fetchApiJson<unknown>(`/competition/${competitionId}/standings`),
-    fetchApiJson<unknown>(`/competition/${competitionId}/rounds`),
+    fetchApiJson<unknown>(`/competition/${competitionId}/rounds`).catch((error) => {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      console.log(`[Competition Detail] Failed to fetch rounds for ${competitionId}: ${message}`);
+      return [] as ApiRoundInfo[];
+    }),
   ]);
 
   const competitions = normalizeCompetitionsPayload(competitionsRaw);
-  const matches = normalizeMatchesPayload(matchesRaw).map((match) => ({
+  const matches = dedupeMatches([
+    ...normalizeMatchesPayload(resultsRaw),
+    ...normalizeMatchesPayload(fixturesRaw),
+  ]).map((match) => ({
     ...match,
     competition_id: Number(match.competition_id ?? competitionId),
   }));
