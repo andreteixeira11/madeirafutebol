@@ -5,9 +5,18 @@ export interface WPPost {
   content: { rendered: string };
   date: string;
   link: string;
+  yoast_head_json?: {
+    author?: string;
+  };
   _embedded?: {
+    author?: {
+      name?: string;
+    }[];
     'wp:featuredmedia'?: {
       source_url: string;
+      caption?: {
+        rendered?: string;
+      };
     }[];
   };
 }
@@ -184,8 +193,8 @@ export const COMPETITION_CATEGORIES: CompetitionCategory[] = [
 ];
 
 export const FEATURED_COMPETITIONS: FeaturedCompetition[] = [
-  { id: 1075, shortName: 'I Liga', order: 0, category: 'seniores', aliases: ['i liga', 'liga portugal', 'primeira liga'] },
-  { shortName: 'II Liga', order: 1, category: 'seniores', aliases: ['ii liga', 'liga 2', 'segunda liga'] },
+  { id: 1075, shortName: 'I Liga', order: 0, category: 'seniores', aliases: ['i liga', 'liga portugal betclic', 'primeira liga'] },
+  { shortName: 'II Liga', order: 1, category: 'seniores', aliases: ['ii liga', 'liga portugal 2 meu super', 'liga 2', 'segunda liga', 'meu super'] },
   { shortName: 'Campeonato de Portugal', order: 2, category: 'seniores', aliases: ['campeonato de portugal'] },
   { shortName: 'Liga Revelação', order: 3, category: 'seniores', aliases: ['liga revelação', 'liga revelacao'] },
   { id: 1, shortName: 'Divisão de Honra Regional', order: 4, category: 'seniores', aliases: ['divisão de honra regional', 'divisao de honra regional', 'divisão de honra'] },

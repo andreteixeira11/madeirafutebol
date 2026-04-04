@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Image,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, List, BarChart3 } from 'lucide-react-native';
@@ -35,25 +36,6 @@ function TeamLogo({ uri, fallback, size = 20 }: { uri?: string; fallback: string
       </Text>
     </View>
   );
-}
-
-function normalizeRoundLabel(match: APIMatch): string {
-  const matchday = Number(match.matchday ?? 0);
-  if (!Number.isNaN(matchday) && matchday > 0) {
-    return `Jornada ${matchday}`;
-  }
-
-  const roundId = String(match.round_id ?? '').trim();
-  if (roundId.length > 0) {
-    if (/^jornada\s+/i.test(roundId)) {
-      return roundId;
-    }
-    if (/^\d+$/.test(roundId)) {
-      return `Jornada ${roundId}`;
-    }
-    return roundId;
-  }
-  return 'Sem Jornada';
 }
 
 type TabType = 'matches' | 'standings';
@@ -187,32 +169,23 @@ export default function CompetitionDetailScreen() {
               </View>
             ) : (
               <>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.matchdayFilters}
-                  testID="matchday-filter-scroll"
-                >
-                  <Pressable
-                    style={[styles.matchdayPill, selectedMatchday === 0 && styles.matchdayPillActive]}
-                    onPress={() => setSelectedMatchday(0)}
-                    testID="matchday-all"
-                  >
-                    <Text style={[styles.matchdayPillText, selectedMatchday === 0 && styles.matchdayPillTextActive]}>Todas</Text>
-                  </Pressable>
-                  {matchdays.map((matchday) => (
-                    <Pressable
-                      key={matchday}
-                      style={[styles.matchdayPill, selectedMatchday === matchday && styles.matchdayPillActive]}
-                      onPress={() => setSelectedMatchday(matchday)}
-                      testID={`matchday-${matchday}`}
+                <View style={styles.matchdayPickerSection}>
+                  <Text style={styles.matchdayPickerLabel}>Jornada</Text>
+                  <View style={styles.matchdayPickerWrap} testID="matchday-picker-wrap">
+                    <Picker
+                      selectedValue={selectedMatchday}
+                      onValueChange={(value: number) => setSelectedMatchday(value)}
+                      style={styles.matchdayPicker}
+                      dropdownIconColor={Colors.primary}
+                      testID="matchday-picker"
                     >
-                      <Text style={[styles.matchdayPillText, selectedMatchday === matchday && styles.matchdayPillTextActive]}>
-                        Jornada {matchday}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                      <Picker.Item label="Todas" value={0} />
+                      {matchdays.map((matchday) => (
+                        <Picker.Item key={matchday} label={`Jornada ${matchday}`} value={matchday} />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
 
                 <View style={styles.roundsContainer}>
                   {matchesByRound.map((group) => (
@@ -397,31 +370,28 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: Colors.primary,
   },
-  matchdayFilters: {
+  matchdayPickerSection: {
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 8,
     gap: 8,
   },
-  matchdayPill: {
-    backgroundColor: Colors.surfaceLight,
+  matchdayPickerLabel: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: Colors.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  matchdayPickerWrap: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    overflow: 'hidden',
   },
-  matchdayPillActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  matchdayPillText: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: Colors.textSecondary,
-  },
-  matchdayPillTextActive: {
-    color: '#FFFFFF',
+  matchdayPicker: {
+    color: Colors.text,
   },
   loadingContainer: {
     flex: 1,

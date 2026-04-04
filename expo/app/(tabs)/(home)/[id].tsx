@@ -69,6 +69,25 @@ function getImageUrl(post: WPPost): string | null {
   return post._embedded?.['wp:featuredmedia']?.[0]?.source_url ?? null;
 }
 
+function getSourceLabel(post: WPPost): string | null {
+  const imageCaption = stripHtml(post._embedded?.['wp:featuredmedia']?.[0]?.caption?.rendered ?? '');
+  if (imageCaption.length > 0) {
+    return imageCaption;
+  }
+
+  const embeddedAuthor = post._embedded?.author?.[0]?.name?.trim();
+  if (embeddedAuthor && embeddedAuthor.length > 0) {
+    return embeddedAuthor;
+  }
+
+  const yoastAuthor = post.yoast_head_json?.author?.trim();
+  if (yoastAuthor && yoastAuthor.length > 0) {
+    return yoastAuthor;
+  }
+
+  return 'Madeirafutebol';
+}
+
 async function fetchPost(id: string): Promise<WPPost> {
   console.log('[Article] Fetching post:', id);
   const response = await fetch(
@@ -90,6 +109,7 @@ export default function ArticleScreen() {
 
   const title = useMemo(() => post ? stripHtml(post.title.rendered) : '', [post]);
   const imageUrl = useMemo(() => post ? getImageUrl(post) : null, [post]);
+  const sourceLabel = useMemo(() => post ? getSourceLabel(post) : null, [post]);
   const contentBlocks = useMemo(
     () => post ? htmlToBlocks(post.content.rendered) : [],
     [post]
@@ -168,6 +188,12 @@ export default function ArticleScreen() {
             <Clock size={14} color={Colors.textSecondary} />
             <Text style={styles.metaDate}>{formatFullDate(post.date)}</Text>
           </View>
+          {sourceLabel ? (
+            <View style={styles.sourceCard} testID="article-source">
+              <Text style={styles.sourceLabel}>Fonte</Text>
+              <Text style={styles.sourceValue}>{sourceLabel}</Text>
+            </View>
+          ) : null}
           <View style={styles.divider} />
           {contentBlocks.map((block, idx) => {
             if (block.type === 'image') {
@@ -318,6 +344,28 @@ const styles = StyleSheet.create({
   metaDate: {
     fontSize: 13,
     color: Colors.textSecondary,
+  },
+  sourceCard: {
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 4,
+  },
+  sourceLabel: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: Colors.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  sourceValue: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.text,
   },
   divider: {
     height: 1,

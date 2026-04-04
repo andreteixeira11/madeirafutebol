@@ -228,6 +228,19 @@ function getFeaturedCompetitionMeta(competition: CompetitionInfo): {
 } {
   const normalizedTitle = normalizeText(competition.title);
 
+  if (
+    normalizedTitle.includes('liga portugal 2') ||
+    normalizedTitle.includes('ii liga') ||
+    normalizedTitle.includes('segunda liga') ||
+    normalizedTitle.includes('meu super')
+  ) {
+    return {
+      order: 1,
+      shortName: 'II Liga',
+      category: 'seniores',
+    };
+  }
+
   const matched = FEATURED_COMPETITIONS.find((item) => {
     if (typeof item.id === 'number' && item.id === competition.id) {
       return true;

@@ -144,8 +144,8 @@ export default function HomeScreen() {
 
   if (newsLoading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.headerBar}>
+      <View style={styles.container}>
+        <View style={[styles.headerBar, { paddingTop: insets.top + 12 }]}>
           <View style={styles.brandRow}>
             <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
             <View>
@@ -163,8 +163,8 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.headerBar}>
+    <View style={styles.container}>
+      <View style={[styles.headerBar, { paddingTop: insets.top + 12 }]}>
         <View style={styles.brandRow}>
           <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
           <View>
