@@ -148,8 +148,20 @@ function getSafeString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&#8220;/g, '“')
+    .replace(/&#8221;/g, '”')
+    .replace(/&#8217;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&#8211;/g, '–')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
 function normalizeText(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  return decodeHtmlEntities(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
 interface ApiRoundInfo {
@@ -195,7 +207,7 @@ export function mapStandingsPayload(raw: unknown): StandingRow[] {
       row.goal_difference ?? row.goal_diff ?? row.gd ?? goalsFor - goalsAgainst,
     );
     const points = Number(row.points ?? 0);
-    const teamName = String(row.team_name ?? row.team ?? `Equipa ${index + 1}`);
+    const teamName = decodeHtmlEntities(String(row.team_name ?? row.team ?? `Equipa ${index + 1}`));
     const teamId = String(row.team_id ?? teamName);
 
     return {
@@ -286,7 +298,7 @@ export async function fetchCompetitionsLogos(): Promise<CompetitionInfo[]> {
 
   const mapped: CompetitionInfo[] = data.map((item: Record<string, unknown>) => ({
     id: Number(item.id ?? 0),
-    title: getSafeString(item.name, getSafeString(item.title, 'Competição')),
+    title: decodeHtmlEntities(getSafeString(item.name, getSafeString(item.title, 'Competição'))),
     logo: getSafeString(item.logo),
     permalink: getSafeString(item.permalink),
   }));

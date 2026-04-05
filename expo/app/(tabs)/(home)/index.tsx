@@ -11,9 +11,9 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { APP_LOGO_URL, APP_NAME, APP_TAGLINE } from '@/constants/branding';
+import { APP_LOGO_URL, APP_NAME } from '@/constants/branding';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Clock, TrendingUp } from 'lucide-react-native';
+import { Clock } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -139,8 +139,8 @@ export default function HomeScreen() {
     router.push(`/(home)/${postId}`);
   }, []);
 
-  const featured = useMemo(() => posts?.slice(0, 3) ?? [], [posts]);
-  const otherNews = useMemo(() => posts?.slice(3) ?? [], [posts]);
+  const featured = useMemo(() => posts?.[0] ?? null, [posts]);
+  const otherNews = useMemo(() => posts?.slice(1) ?? [], [posts]);
 
   if (newsLoading) {
     return (
@@ -150,7 +150,6 @@ export default function HomeScreen() {
             <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
             <View>
               <Text style={styles.appTitle}>{APP_NAME}</Text>
-              <Text style={styles.appSubtitle}>{APP_TAGLINE}</Text>
             </View>
           </View>
         </View>
@@ -169,7 +168,6 @@ export default function HomeScreen() {
           <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
           <View>
             <Text style={styles.appTitle}>{APP_NAME}</Text>
-            <Text style={styles.appSubtitle}>{APP_TAGLINE}</Text>
           </View>
         </View>
       </View>
@@ -186,26 +184,11 @@ export default function HomeScreen() {
           />
         }
       >
-        {featured.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <TrendingUp size={18} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Destaques</Text>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.featuredScroll}
-              decelerationRate="fast"
-              snapToInterval={SCREEN_WIDTH - 48}
-              snapToAlignment="start"
-            >
-              {featured.map(post => (
-                <FeaturedCard key={post.id} post={post} onPress={() => openPost(post.id)} />
-              ))}
-            </ScrollView>
-          </>
-        )}
+        {featured ? (
+          <View style={styles.featuredSingleWrap}>
+            <FeaturedCard post={featured} onPress={() => openPost(featured.id)} />
+          </View>
+        ) : null}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Últimas Notícias</Text>
@@ -250,11 +233,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     letterSpacing: -0.5,
   },
-  appSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -283,10 +261,9 @@ const styles = StyleSheet.create({
     color: Colors.text,
     flex: 1,
   },
-  featuredScroll: {
-    paddingLeft: 16,
-    gap: 12,
-    paddingRight: 16,
+  featuredSingleWrap: {
+    paddingHorizontal: 16,
+    marginTop: 16,
   },
   featuredCard: {
     width: SCREEN_WIDTH - 48,

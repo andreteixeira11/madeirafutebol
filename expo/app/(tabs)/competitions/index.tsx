@@ -8,7 +8,6 @@ import {
   Animated,
   ActivityIndicator,
   RefreshControl,
-  Image,
   TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +15,8 @@ import { Trophy, ChevronRight, Search } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
+import { Image } from 'expo-image';
+import { APP_LOGO_URL, APP_NAME } from '@/constants/branding';
 import { COMPETITION_CATEGORIES } from '@/types/football';
 import {
   fetchCompetitionsLogos,
@@ -46,10 +47,8 @@ function CompLogo({ uri, size = 36 }: { uri?: string; size?: number }) {
 
 const CompetitionRow = React.memo(function CompetitionRow({
   competition,
-  shortName,
 }: {
   competition: CompetitionInfo;
-  shortName: string;
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -73,8 +72,7 @@ const CompetitionRow = React.memo(function CompetitionRow({
       <Animated.View style={[styles.compCard, { transform: [{ scale: scaleAnim }] }]}> 
         <CompLogo uri={competition.logo} size={40} />
         <View style={styles.compInfo}>
-          <Text style={styles.compName} numberOfLines={1}>{shortName}</Text>
-          <Text style={styles.compFullName} numberOfLines={1}>{competition.title}</Text>
+          <Text style={styles.compName}>{competition.title}</Text>
         </View>
         <ChevronRight size={18} color={Colors.textMuted} />
       </Animated.View>
@@ -139,10 +137,9 @@ export default function CompetitionsScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}> 
         <View style={styles.header}>
-          <Trophy size={22} color={Colors.primary} />
+          <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
           <View>
-            <Text style={styles.headerTitle}>Competições</Text>
-            <Text style={styles.headerSubtitle}>Futebol da Madeira</Text>
+            <Text style={styles.headerTitle}>{APP_NAME}</Text>
           </View>
         </View>
         <View style={styles.loadingContainer}>
@@ -157,9 +154,9 @@ export default function CompetitionsScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}> 
         <View style={styles.header}>
-          <Trophy size={22} color={Colors.primary} />
+          <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
           <View>
-            <Text style={styles.headerTitle}>Competições</Text>
+            <Text style={styles.headerTitle}>{APP_NAME}</Text>
           </View>
         </View>
         <View style={styles.errorContainer}>
@@ -177,10 +174,9 @@ export default function CompetitionsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}> 
       <View style={styles.header}>
-        <Trophy size={22} color={Colors.primary} />
+        <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
         <View>
-          <Text style={styles.headerTitle}>Competições</Text>
-          <Text style={styles.headerSubtitle}>Da mais popular à menos popular</Text>
+          <Text style={styles.headerTitle}>{APP_NAME}</Text>
         </View>
       </View>
 
@@ -221,15 +217,16 @@ export default function CompetitionsScreen() {
         ) : (
           sections.map((section) => (
             <View key={section.key} style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <Text style={styles.sectionCount}>{section.items.length}</Text>
-              </View>
+              {section.key !== 'seniores' ? (
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                  <Text style={styles.sectionCount}>{section.items.length}</Text>
+                </View>
+              ) : null}
               {section.items.map((comp) => (
                 <CompetitionRow
                   key={comp.id}
                   competition={comp}
-                  shortName={getCompetitionShortName(comp)}
                 />
               ))}
             </View>
@@ -260,16 +257,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  headerLogo: {
+    width: 44,
+    height: 44,
+  },
   headerTitle: {
     fontSize: 26,
     fontWeight: '800' as const,
-    color: Colors.text,
+    color: Colors.primary,
     letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 1,
   },
   searchWrap: {
     paddingHorizontal: 16,
@@ -396,12 +392,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700' as const,
     color: Colors.text,
-  },
-  compFullName: {
-    fontSize: 12,
-    fontWeight: '400' as const,
-    color: Colors.textSecondary,
-    marginTop: 1,
+    lineHeight: 21,
   },
   emptyState: {
     alignItems: 'center',

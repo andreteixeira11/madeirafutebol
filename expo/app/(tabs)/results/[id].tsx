@@ -181,7 +181,6 @@ export default function MatchDetailScreen() {
         <View style={styles.standingsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Classificação</Text>
-            <Text style={styles.sectionSubtitle}>Da competição deste jogo</Text>
           </View>
 
           {standingsLoading ? (
@@ -427,11 +426,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800' as const,
     color: Colors.text,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
   },
   standingsLoading: {
     backgroundColor: Colors.surface,

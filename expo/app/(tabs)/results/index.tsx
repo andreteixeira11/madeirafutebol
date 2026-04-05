@@ -17,7 +17,7 @@ import { Calendar, X, ChevronLeft, ChevronRight, Search, Trophy } from 'lucide-r
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
-import { APP_LOGO_URL, APP_TAGLINE } from '@/constants/branding';
+import { APP_LOGO_URL, APP_NAME } from '@/constants/branding';
 import { APIMatch } from '@/types/football';
 import {
   extractScore,
@@ -163,7 +163,7 @@ const MatchRow = React.memo(function MatchRow({
   );
 });
 
-type DateFilter = 'all' | 'today' | 'tomorrow' | 'custom';
+type DateFilter = 'today' | 'tomorrow' | 'custom';
 
 interface MatchesGroup {
   competitionId: number;
@@ -326,7 +326,7 @@ export default function ResultsScreen() {
     return d;
   }, [today]);
 
-  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('today');
   const [customDate, setCustomDate] = useState<Date | null>(null);
   const [showCalendar, setShowCalendar] = useState<boolean>(false);
   const [teamSearch, setTeamSearch] = useState<string>('');
@@ -350,7 +350,7 @@ export default function ResultsScreen() {
     staleTime: 30 * 60 * 1000,
   });
 
-const competitionMaps = useMemo(() => {
+  const competitionMaps = useMemo(() => {
   const nameMap: Record<number, string> = {};
   const logoMap: Record<number, string> = {};
 
@@ -362,19 +362,15 @@ const competitionMaps = useMemo(() => {
   });
 
   return { nameMap, logoMap };
-}, [competitions]);
+  }, [competitions]);
   const competitionList = useMemo(() => competitions ?? ([] as CompetitionInfo[]), [competitions]);
 
   const filteredMatches = useMemo(() => {
     if (!allMatches || !Array.isArray(allMatches)) return [] as APIMatch[];
 
-    const matchesByDate = (dateFilter === 'all' ? allMatches : allMatches).filter((match) => {
+    const matchesByDate = allMatches.filter((match) => {
       const matchDate = parseMatchDate(match.date);
       if (!matchDate) return false;
-
-      if (dateFilter === 'all') {
-        return isSameDay(matchDate, today) || isSameDay(matchDate, tomorrow);
-      }
 
       if (!selectedDate) return false;
       return isSameDay(matchDate, selectedDate);
@@ -389,7 +385,7 @@ const competitionMaps = useMemo(() => {
       const haystack = `${match.team1} ${match.team2}`;
       return normalizeText(haystack).includes(normalizedSearch);
     });
-  }, [allMatches, dateFilter, selectedDate, teamSearch, today, tomorrow]);
+  }, [allMatches, selectedDate, teamSearch]);
 
   const groupedMatches = useMemo(() => {
     const groups: Record<string, APIMatch[]> = {};
@@ -455,7 +451,6 @@ const competitionMaps = useMemo(() => {
           <CompetitionLogo uri={item.competitionLogo} />
           <Text style={styles.competitionTitle}>{item.competitionName}</Text>
         </View>
-        <Text style={styles.competitionCount}>{item.matches.length}</Text>
       </View>
 
       <View style={styles.competitionCard}>
@@ -482,24 +477,12 @@ const competitionMaps = useMemo(() => {
         <View style={styles.headerBrand}>
           <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} resizeMode="contain" />
           <View>
-            <Text style={styles.headerTitle}>Resultados</Text>
-            <Text style={styles.headerSubtitle}>{APP_TAGLINE}</Text>
+            <Text style={styles.headerTitle}>{APP_NAME}</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.filterBar}>
-        <Pressable
-          style={[styles.filterPill, dateFilter === 'all' && styles.filterPillActive]}
-          onPress={() => {
-            setDateFilter('all');
-            setCustomDate(null);
-          }}
-          testID="filter-all"
-        >
-          <Text style={[styles.filterPillText, dateFilter === 'all' && styles.filterPillTextActive]}>Todos</Text>
-        </Pressable>
-
         <Pressable
           style={[styles.filterPill, dateFilter === 'today' && styles.filterPillActive]}
           onPress={() => {
@@ -555,21 +538,6 @@ const competitionMaps = useMemo(() => {
             testID="team-search-input"
           />
         </View>
-      </View>
-
-      <View style={styles.dateLabelBar}>
-        <Text style={styles.dateLabelText}>
-          {dateFilter === 'all'
-            ? 'Jogos de hoje e amanhã'
-            : selectedDate
-              ? dateFilter === 'today'
-                ? 'Jogos de hoje'
-                : dateFilter === 'tomorrow'
-                  ? 'Jogos de amanhã'
-                  : `Jogos de ${formatDisplayDate(selectedDate)}`
-              : 'Jogos'}
-        </Text>
-        <Text style={styles.dateLabelCount}>{filteredMatches.length} jogos</Text>
       </View>
 
       {isLoading ? (
@@ -651,11 +619,6 @@ const styles = StyleSheet.create({
     color: Colors.text,
     letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 1,
-  },
   filterBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -722,26 +685,6 @@ const styles = StyleSheet.create({
     color: Colors.text,
     paddingVertical: 0,
   },
-  dateLabelBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: Colors.surfaceLight,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  dateLabelText: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-  },
-  dateLabelCount: {
-    fontSize: 12,
-    fontWeight: '500' as const,
-    color: Colors.textMuted,
-  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -791,11 +734,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800' as const,
     color: Colors.text,
-  },
-  competitionCount: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: Colors.textMuted,
   },
   competitionCard: {
     backgroundColor: Colors.surface,
