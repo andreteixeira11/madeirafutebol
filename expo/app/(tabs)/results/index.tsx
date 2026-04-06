@@ -17,7 +17,7 @@ import { Calendar, X, ChevronLeft, ChevronRight, Search, Trophy } from 'lucide-r
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
-import { APP_LOGO_URL, APP_NAME } from '@/constants/branding';
+import { APP_LOGO_URL } from '@/constants/branding';
 import { APIMatch } from '@/types/football';
 import {
   extractScore,
@@ -477,7 +477,7 @@ export default function ResultsScreen() {
         <View style={styles.headerBrand}>
           <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} resizeMode="contain" />
           <View>
-            <Text style={styles.headerTitle}>{APP_NAME}</Text>
+            <Text style={styles.headerTitle}>Resultados</Text>
           </View>
         </View>
       </View>
@@ -597,9 +597,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 10,
+    paddingBottom: 12,
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
@@ -610,11 +613,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   headerLogo: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800' as const,
     color: Colors.text,
     letterSpacing: -0.5,

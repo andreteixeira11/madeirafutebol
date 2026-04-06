@@ -43,7 +43,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={styles.root}>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <RootLayoutNav />
         {showLaunchScreen ? (
           <View style={styles.launchScreen} pointerEvents="none">
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   },
   launchScreen: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },

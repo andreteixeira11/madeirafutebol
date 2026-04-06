@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   appTitle: {
     fontSize: 26,
     fontWeight: '800' as const,
-    color: Colors.primary,
+    color: Colors.text,
     letterSpacing: -0.5,
   },
   loadingContainer: {
@@ -262,11 +262,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featuredSingleWrap: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     marginTop: 16,
   },
   featuredCard: {
-    width: SCREEN_WIDTH - 48,
+    width: SCREEN_WIDTH - 24,
     height: 210,
     borderRadius: 16,
     overflow: 'hidden',

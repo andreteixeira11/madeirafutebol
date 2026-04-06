@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import Colors from '@/constants/colors';
 import { Image } from 'expo-image';
-import { APP_LOGO_URL, APP_NAME } from '@/constants/branding';
+import { APP_LOGO_URL } from '@/constants/branding';
 import { COMPETITION_CATEGORIES } from '@/types/football';
 import {
   fetchCompetitionsLogos,
@@ -139,7 +139,7 @@ export default function CompetitionsScreen() {
         <View style={styles.header}>
           <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
           <View>
-            <Text style={styles.headerTitle}>{APP_NAME}</Text>
+            <Text style={styles.headerTitle}>Competições</Text>
           </View>
         </View>
         <View style={styles.loadingContainer}>
@@ -156,7 +156,7 @@ export default function CompetitionsScreen() {
         <View style={styles.header}>
           <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
           <View>
-            <Text style={styles.headerTitle}>{APP_NAME}</Text>
+            <Text style={styles.headerTitle}>Competições</Text>
           </View>
         </View>
         <View style={styles.errorContainer}>
@@ -176,7 +176,7 @@ export default function CompetitionsScreen() {
       <View style={styles.header}>
         <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
         <View>
-          <Text style={styles.headerTitle}>{APP_NAME}</Text>
+          <Text style={styles.headerTitle}>Competições</Text>
         </View>
       </View>
 
@@ -220,7 +220,6 @@ export default function CompetitionsScreen() {
               {section.key !== 'seniores' ? (
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>{section.title}</Text>
-                  <Text style={styles.sectionCount}>{section.items.length}</Text>
                 </View>
               ) : null}
               {section.items.map((comp) => (
@@ -249,6 +248,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 20,
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 26,
     fontWeight: '800' as const,
-    color: Colors.primary,
+    color: Colors.text,
     letterSpacing: -0.5,
   },
   searchWrap: {
@@ -352,17 +352,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800' as const,
     color: Colors.text,
-  },
-  sectionCount: {
-    minWidth: 24,
-    textAlign: 'center' as const,
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: Colors.primary,
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
   },
   compCard: {
     flexDirection: 'row',
