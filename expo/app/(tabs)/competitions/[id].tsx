@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -68,13 +68,65 @@ export default function CompetitionDetailScreen() {
     return available;
   }, [competitionDetail, competitionId]);
 
+  const currentMatchday = useMemo(() => {
+    const allMatchdays = competitionDetail?.matchdays ?? [];
+    if (allMatchdays.length === 0) {
+      return 0;
+    }
+
+    const liveGroup = allMatchdays.find((group) =>
+      (group.matches ?? []).some((match) => isMatchLive(match)),
+    );
+    if (liveGroup && Number(liveGroup.matchday ?? 0) > 0) {
+      return Number(liveGroup.matchday ?? 0);
+    }
+
+    const now = Date.now();
+    const datedGroups = allMatchdays
+      .map((group) => {
+        const timestamps = (group.matches ?? [])
+          .map((match) => new Date(match.date).getTime())
+          .filter((value) => !Number.isNaN(value));
+
+        if (timestamps.length === 0) {
+          return null;
+        }
+
+        return {
+          matchday: Number(group.matchday ?? 0),
+          referenceTime: Math.min(...timestamps),
+        };
+      })
+      .filter((group): group is { matchday: number; referenceTime: number } => {
+        return !!group && group.matchday > 0;
+      })
+      .sort((a, b) => a.matchday - b.matchday);
+
+    const upcomingGroup = datedGroups.find((group) => group.referenceTime >= now);
+    if (upcomingGroup) {
+      return upcomingGroup.matchday;
+    }
+
+    return datedGroups[datedGroups.length - 1]?.matchday ?? matchdays[matchdays.length - 1] ?? 0;
+  }, [competitionDetail, matchdays]);
+
+  useEffect(() => {
+    if (selectedMatchday === 0 && currentMatchday > 0) {
+      console.log(`[Competition Detail] Defaulting to current matchday ${currentMatchday} for ${competitionId}`);
+      setSelectedMatchday(currentMatchday);
+    }
+  }, [competitionId, currentMatchday, selectedMatchday]);
+
   const filteredMatchdays = useMemo(() => {
     const allMatchdays = competitionDetail?.matchdays ?? [];
-    if (selectedMatchday === 0) {
-      return allMatchdays;
+    const resolvedMatchday = selectedMatchday > 0 ? selectedMatchday : currentMatchday;
+
+    if (resolvedMatchday > 0) {
+      return allMatchdays.filter((item) => Number(item.matchday ?? 0) === resolvedMatchday);
     }
-    return allMatchdays.filter((item) => Number(item.matchday ?? 0) === selectedMatchday);
-  }, [competitionDetail, selectedMatchday]);
+
+    return allMatchdays;
+  }, [competitionDetail, currentMatchday, selectedMatchday]);
 
   const compMatches = useMemo(() => filteredMatchdays.flatMap((m) => m.matches ?? []), [filteredMatchdays]);
 
@@ -179,7 +231,6 @@ export default function CompetitionDetailScreen() {
                       dropdownIconColor={Colors.primary}
                       testID="matchday-picker"
                     >
-                      <Picker.Item label="Todas" value={0} />
                       {matchdays.map((matchday) => (
                         <Picker.Item key={matchday} label={`Jornada ${matchday}`} value={matchday} />
                       ))}

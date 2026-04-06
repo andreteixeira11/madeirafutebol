@@ -174,8 +174,8 @@ export default function CompetitionsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}> 
       <View style={styles.header}>
-        <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
-        <View>
+        <View style={styles.headerBrand}>
+          <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
           <Text style={styles.headerTitle}>Competições</Text>
         </View>
       </View>
@@ -248,14 +248,17 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+  },
+  headerBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerLogo: {
     width: 44,
