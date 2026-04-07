@@ -8,11 +8,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  Platform,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, List, BarChart3 } from 'lucide-react-native';
+import { ArrowLeft, List, BarChart3, ChevronDown } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { APIMatch } from '@/types/football';
@@ -235,6 +236,7 @@ export default function CompetitionDetailScreen() {
                       selectedValue={resolvedMatchday > 0 ? resolvedMatchday : undefined}
                       onValueChange={(value: number) => setSelectedMatchday(value)}
                       style={styles.matchdayPicker}
+                      mode="dropdown"
                       dropdownIconColor={Colors.primary}
                       testID="matchday-picker"
                     >
@@ -242,6 +244,11 @@ export default function CompetitionDetailScreen() {
                         <Picker.Item key={matchday} label={`Jornada ${matchday}`} value={matchday} />
                       ))}
                     </Picker>
+                    {Platform.OS !== 'android' ? (
+                      <View pointerEvents="none" style={styles.matchdayPickerIconWrap}>
+                        <ChevronDown size={18} color={Colors.primary} />
+                      </View>
+                    ) : null}
                   </View>
                 </View>
 
@@ -446,9 +453,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
+    position: 'relative',
+    minHeight: 50,
+    justifyContent: 'center',
   },
   matchdayPicker: {
     color: Colors.text,
+    height: 50,
+    paddingRight: Platform.OS === 'android' ? 0 : 36,
+  },
+  matchdayPickerIconWrap: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
   loadingContainer: {
     flex: 1,
