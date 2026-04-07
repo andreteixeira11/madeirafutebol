@@ -46,7 +46,8 @@ export default function CompetitionDetailScreen() {
   const competitionId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState<TabType>('matches');
-  const [selectedMatchday, setSelectedMatchday] = useState<number>(0);
+  const [selectedMatchday, setSelectedMatchday] = useState<number | null>(null);
+  const hasInitializedMatchday = selectedMatchday !== null;
 
   const { data: competitionDetail, isLoading: matchesLoading, refetch, isRefetching } = useQuery({
     queryKey: ['competition-detail', competitionId],
@@ -111,22 +112,28 @@ export default function CompetitionDetailScreen() {
   }, [competitionDetail, matchdays]);
 
   useEffect(() => {
-    if (selectedMatchday === 0 && currentMatchday > 0) {
-      console.log(`[Competition Detail] Defaulting to current matchday ${currentMatchday} for ${competitionId}`);
-      setSelectedMatchday(currentMatchday);
+    if (hasInitializedMatchday) {
+      return;
     }
-  }, [competitionId, currentMatchday, selectedMatchday]);
+
+    const fallbackMatchday = currentMatchday > 0 ? currentMatchday : matchdays[0] ?? 0;
+    if (fallbackMatchday > 0) {
+      console.log(`[Competition Detail] Defaulting to current matchday ${fallbackMatchday} for ${competitionId}`);
+      setSelectedMatchday(fallbackMatchday);
+    }
+  }, [competitionId, currentMatchday, hasInitializedMatchday, matchdays]);
+
+  const resolvedMatchday = selectedMatchday ?? currentMatchday;
 
   const filteredMatchdays = useMemo(() => {
     const allMatchdays = competitionDetail?.matchdays ?? [];
-    const resolvedMatchday = selectedMatchday > 0 ? selectedMatchday : currentMatchday;
 
     if (resolvedMatchday > 0) {
       return allMatchdays.filter((item) => Number(item.matchday ?? 0) === resolvedMatchday);
     }
 
     return allMatchdays;
-  }, [competitionDetail, currentMatchday, selectedMatchday]);
+  }, [competitionDetail, resolvedMatchday]);
 
   const compMatches = useMemo(() => filteredMatchdays.flatMap((m) => m.matches ?? []), [filteredMatchdays]);
 
@@ -225,7 +232,7 @@ export default function CompetitionDetailScreen() {
                   <Text style={styles.matchdayPickerLabel}>Jornada</Text>
                   <View style={styles.matchdayPickerWrap} testID="matchday-picker-wrap">
                     <Picker
-                      selectedValue={selectedMatchday}
+                      selectedValue={resolvedMatchday > 0 ? resolvedMatchday : undefined}
                       onValueChange={(value: number) => setSelectedMatchday(value)}
                       style={styles.matchdayPicker}
                       dropdownIconColor={Colors.primary}
@@ -243,7 +250,6 @@ export default function CompetitionDetailScreen() {
                     <View key={group.roundLabel} style={styles.roundCard}>
                       <View style={styles.roundHeader}>
                         <Text style={styles.roundTitle}>{group.roundLabel}</Text>
-                        <Text style={styles.roundCount}>{group.matches.length} jogos</Text>
                       </View>
                       {group.matches.map((match, mIdx) => {
                         const score = extractScore(match);
@@ -475,7 +481,6 @@ const styles = StyleSheet.create({
   roundHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: Colors.surfaceLight,
@@ -486,11 +491,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700' as const,
     color: Colors.text,
-  },
-  roundCount: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-    color: Colors.textMuted,
   },
   matchRow: {
     flexDirection: 'row',
