@@ -64,7 +64,14 @@ function CompetitionLogo({ uri }: { uri?: string }) {
 
 export default function MatchDetailScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ id: string; matchData?: string; compName?: string; competitionId?: string; compLogo?: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    matchData?: string;
+    compName?: string;
+    competitionId?: string;
+    compLogo?: string;
+    matchdayLabel?: string;
+  }>();
 
   const match: APIMatch | null = useMemo(() => {
     if (params.matchData) {
@@ -81,6 +88,18 @@ export default function MatchDetailScreen() {
   const compLogo = params.compLogo;
   const competitionId = Number(params.competitionId ?? match?.competition_id ?? 0);
   const goBack = useCallback(() => router.back(), []);
+  const matchdayLabel = useMemo(() => {
+    if (typeof params.matchdayLabel === 'string' && params.matchdayLabel.trim().length > 0) {
+      return params.matchdayLabel.trim();
+    }
+
+    const rawMatchday = Number(match?.matchday ?? 0);
+    if (rawMatchday > 0) {
+      return `Jornada ${rawMatchday}`;
+    }
+
+    return null;
+  }, [match?.matchday, params.matchdayLabel]);
 
   const { data: standings, isLoading: standingsLoading } = useQuery({
     queryKey: ['competition-standings', competitionId],
@@ -175,6 +194,12 @@ export default function MatchDetailScreen() {
               <MapPin size={13} color={Colors.textSecondary} />
               <Text style={styles.infoChipText}>{formatFullDate(match.date)}</Text>
             </View>
+            {matchdayLabel ? (
+              <View style={styles.infoChip}>
+                <Trophy size={13} color={Colors.textSecondary} />
+                <Text style={styles.infoChipText}>{matchdayLabel}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 

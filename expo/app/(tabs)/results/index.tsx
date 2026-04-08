@@ -109,6 +109,8 @@ const MatchRow = React.memo(function MatchRow({
         compName,
         competitionId: String(competitionId),
         compLogo,
+        matchdayLabel:
+          typeof match.matchday === 'number' && match.matchday > 0 ? `Jornada ${match.matchday}` : undefined,
       },
     });
   }, [match, compName, competitionId, compLogo]);
@@ -342,6 +344,8 @@ export default function ResultsScreen() {
     queryKey: ['api-matches-merged'],
     queryFn: fetchAllMatchesMerged,
     staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: true,
   });
 
   const { data: competitions } = useQuery({

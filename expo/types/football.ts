@@ -171,6 +171,41 @@ export const COMPETITION_CATEGORIES: CompetitionCategory[] = [
     aliases: ['campeonato nacional bpi', 'femininos regionais', 'feminino', 'femininos'],
   },
   {
+    key: 'futsal',
+    title: 'Futsal',
+    aliases: ['futsal'],
+  },
+  {
+    key: 'juniores',
+    title: 'Juniores',
+    aliases: ['juniores', 'sub-19', 'sub 19', 'u19'],
+  },
+  {
+    key: 'juvenis',
+    title: 'Juvenis',
+    aliases: ['juvenis', 'sub-17', 'sub 17', 'u17'],
+  },
+  {
+    key: 'iniciados',
+    title: 'Iniciados',
+    aliases: ['iniciados', 'sub-15', 'sub 15', 'u15'],
+  },
+  {
+    key: 'infantis',
+    title: 'Infantis',
+    aliases: ['infantis'],
+  },
+  {
+    key: 'sub13',
+    title: 'Sub-13',
+    aliases: ['sub-13', 'sub 13', 'u13'],
+  },
+  {
+    key: 'sub12',
+    title: 'Sub-12',
+    aliases: ['sub-12', 'sub 12', 'u12'],
+  },
+  {
     key: 'formacao',
     title: 'Futebol de Formação',
     aliases: ['sub-', 'juniores', 'juvenis', 'iniciados', 'infantis', 'formação', 'formacao'],
@@ -179,11 +214,6 @@ export const COMPETITION_CATEGORIES: CompetitionCategory[] = [
     key: 'tacas',
     title: 'Taças',
     aliases: ['taça', 'taca', 'cup'],
-  },
-  {
-    key: 'futsal',
-    title: 'Futsal',
-    aliases: ['futsal'],
   },
   {
     key: 'outras',
@@ -201,7 +231,13 @@ export const FEATURED_COMPETITIONS: FeaturedCompetition[] = [
   { id: 2, shortName: 'Campeonato Regional 1 Divisão Seniores', order: 5, category: 'seniores', aliases: ['campeonato regional 1 divisao seniores', 'campeonato regional 1 divisão seniores', '1ª divisão regional', '1 divisao regional'] },
   { shortName: 'Campeonato Nacional BPI', order: 6, category: 'femininos', aliases: ['campeonato nacional bpi', 'bpi'] },
   { shortName: 'Femininos Regionais', order: 7, category: 'femininos', aliases: ['femininos regionais', 'regional feminino'] },
-  { shortName: 'Futebol de Formação', order: 8, category: 'formacao', aliases: ['sub-', 'juniores', 'juvenis', 'iniciados', 'infantis'] },
-  { shortName: 'Taças', order: 9, category: 'tacas', aliases: ['taça', 'taca'] },
-  { shortName: 'Futsal', order: 10, category: 'futsal', aliases: ['futsal'] },
+  { shortName: 'Futsal', order: 8, category: 'futsal', aliases: ['futsal'] },
+  { shortName: 'Juniores', order: 9, category: 'juniores', aliases: ['juniores', 'sub-19', 'sub 19', 'u19'] },
+  { shortName: 'Juvenis', order: 10, category: 'juvenis', aliases: ['juvenis', 'sub-17', 'sub 17', 'u17'] },
+  { shortName: 'Iniciados', order: 11, category: 'iniciados', aliases: ['iniciados', 'sub-15', 'sub 15', 'u15'] },
+  { shortName: 'Infantis', order: 12, category: 'infantis', aliases: ['infantis'] },
+  { shortName: 'Sub-13', order: 13, category: 'sub13', aliases: ['sub-13', 'sub 13', 'u13'] },
+  { shortName: 'Sub-12', order: 14, category: 'sub12', aliases: ['sub-12', 'sub 12', 'u12'] },
+  { shortName: 'Futebol de Formação', order: 15, category: 'formacao', aliases: ['sub-', 'juniores', 'juvenis', 'iniciados', 'infantis'] },
+  { shortName: 'Taças', order: 16, category: 'tacas', aliases: ['taça', 'taca'] },
 ];
