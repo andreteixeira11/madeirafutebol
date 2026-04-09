@@ -4,6 +4,7 @@ const ONE_SIGNAL_APP_ID = '7a50e38a-ae5f-4107-b1f9-3f0b052824d8';
 const ONE_SIGNAL_SDK_URL = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
 const ONE_SIGNAL_WORKER_PATH = '/OneSignalSDKWorker.js';
 const ONE_SIGNAL_UPDATER_WORKER_PATH = '/OneSignalSDKUpdaterWorker.js';
+const ONE_SIGNAL_PERMISSION_REQUEST_KEY = 'mf-onesignal-permission-requested';
 
 type OneSignalWebInstance = {
   init: (options: {
@@ -71,7 +72,7 @@ async function loadOneSignalScript(): Promise<void> {
 
 export async function initializeOneSignal(): Promise<void> {
   if (Platform.OS !== 'web') {
-    console.log('[OneSignal] Native push setup is not available in Expo Go. Skipping native initialization.');
+    console.log('[OneSignal] Native push requires a development/production build with native OneSignal setup. Expo Go cannot register native OneSignal push.');
     return;
   }
 
@@ -120,9 +121,45 @@ export async function requestOneSignalPermission(): Promise<void> {
     const currentPermission = OneSignal.Notifications?.permissionNative ?? 'default';
     console.log(`[OneSignal] Current notification permission: ${currentPermission}`);
 
-    if (currentPermission === 'default') {
-      await OneSignal.Notifications?.requestPermission?.();
-      console.log('[OneSignal] Permission prompt requested');
+    if (currentPermission === 'granted') {
+      console.log('[OneSignal] Permission already granted');
+      return;
     }
+
+    if (currentPermission === 'denied') {
+      console.log('[OneSignal] Permission previously denied');
+      return;
+    }
+
+    await OneSignal.Notifications?.requestPermission?.();
+    console.log('[OneSignal] Permission prompt requested');
   });
+}
+
+export function shouldPromptOneSignalPermission(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    const hasRequestedPermission = window.localStorage.getItem(ONE_SIGNAL_PERMISSION_REQUEST_KEY);
+    return hasRequestedPermission !== 'true';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown storage error';
+    console.log(`[OneSignal] Failed to read permission prompt flag: ${message}`);
+    return true;
+  }
+}
+
+export function markOneSignalPermissionPrompted(): void {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(ONE_SIGNAL_PERMISSION_REQUEST_KEY, 'true');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown storage error';
+    console.log(`[OneSignal] Failed to store permission prompt flag: ${message}`);
+  }
 }

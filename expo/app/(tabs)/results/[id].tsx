@@ -7,6 +7,7 @@ import {
   Image,
   Pressable,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -101,11 +102,16 @@ export default function MatchDetailScreen() {
     return null;
   }, [match?.matchday, params.matchdayLabel]);
 
-  const { data: standings, isLoading: standingsLoading } = useQuery({
+  const { data: standings, isLoading: standingsLoading, refetch, isRefetching } = useQuery({
     queryKey: ['competition-standings', competitionId],
     queryFn: () => fetchCompetitionStandings(competitionId),
     enabled: competitionId > 0,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: true,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
   if (!match) {
@@ -139,7 +145,18 @@ export default function MatchDetailScreen() {
         <View style={styles.backBtn} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+      >
         <View style={styles.matchCard}>
           <View style={styles.competitionBadge}>
             <CompetitionLogo uri={compLogo} />

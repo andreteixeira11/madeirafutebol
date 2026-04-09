@@ -95,7 +95,12 @@ export default function CompetitionDetailScreen() {
     queryKey: ['competition-detail', competitionId],
     queryFn: () => fetchCompetitionDetail(competitionId),
     enabled: !!competitionId,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: true,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
   const fallbackTitle = params.title || 'Competição';

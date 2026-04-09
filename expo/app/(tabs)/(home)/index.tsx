@@ -132,7 +132,12 @@ export default function HomeScreen() {
   const { data: posts, isLoading: newsLoading, refetch: refetchNews, isRefetching } = useQuery({
     queryKey: ['wp-posts'],
     queryFn: fetchPosts,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: true,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
   const openPost = useCallback((postId: number) => {

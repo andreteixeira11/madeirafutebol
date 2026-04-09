@@ -343,15 +343,23 @@ export default function ResultsScreen() {
   const { data: allMatches, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['api-matches-merged'],
     queryFn: fetchAllMatchesMerged,
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
     refetchIntervalInBackground: true,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
   const { data: competitions } = useQuery({
     queryKey: ['api-competitions-logos'],
     queryFn: fetchCompetitionsLogos,
-    staleTime: 30 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: true,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 
   const competitionMaps = useMemo(() => {
