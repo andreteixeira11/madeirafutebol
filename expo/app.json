@@ -16,7 +16,18 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "org.reactjs.native.example.madeirafutebol",
-      "buildNumber": "2"
+      "buildNumber": "2",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      },
+      "entitlements": {
+        "aps-environment": "production",
+        "com.apple.security.application-groups": [
+          "group.org.reactjs.native.example.madeirafutebol.onesignal"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
