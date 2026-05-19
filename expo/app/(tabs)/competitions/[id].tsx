@@ -323,15 +323,39 @@ export default function CompetitionDetailScreen() {
               ) : (
                 <>
                   <View style={styles.matchdayPickerSection}>
-                    <Text style={styles.matchdayPickerLabel}>{isCupFormat ? 'Eliminatória' : 'Jornada'}</Text>
-                    <Pressable
-                      style={styles.matchdayDropdownTrigger}
-                      onPress={() => setShowMatchdayDropdown(true)}
-                      testID="matchday-dropdown-trigger"
-                    >
-                      <Text style={styles.matchdayDropdownText}>{selectedMatchdayLabel}</Text>
-                      <ChevronDown size={18} color={Colors.primary} />
-                    </Pressable>
+                    <Text style={styles.matchdayPickerLabel}>{isCupFormat ? 'Escolhe a eliminatória' : 'Jornada'}</Text>
+                    {isCupFormat ? (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.cupRoundsList}
+                      >
+                        {matchdayOptions.map((option) => {
+                          const selected = option.value === resolvedMatchday;
+                          return (
+                            <Pressable
+                              key={option.value}
+                              style={[styles.cupRoundChip, selected && styles.cupRoundChipActive]}
+                              onPress={() => handleSelectMatchday(option.value)}
+                              testID={`cup-round-option-${option.value}`}
+                            >
+                              <Text style={[styles.cupRoundChipText, selected && styles.cupRoundChipTextActive]}>
+                                {option.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    ) : (
+                      <Pressable
+                        style={styles.matchdayDropdownTrigger}
+                        onPress={() => setShowMatchdayDropdown(true)}
+                        testID="matchday-dropdown-trigger"
+                      >
+                        <Text style={styles.matchdayDropdownText}>{selectedMatchdayLabel}</Text>
+                        <ChevronDown size={18} color={Colors.primary} />
+                      </Pressable>
+                    )}
                   </View>
 
                   <View style={styles.roundsContainer}>
@@ -479,7 +503,7 @@ export default function CompetitionDetailScreen() {
           </ScrollView>
 
           <Modal
-            visible={showMatchdayDropdown}
+            visible={!isCupFormat && showMatchdayDropdown}
             transparent
             animationType="fade"
             onRequestClose={() => setShowMatchdayDropdown(false)}
@@ -605,6 +629,32 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700' as const,
     color: Colors.text,
+  },
+  cupRoundsList: {
+    gap: 8,
+    paddingRight: 12,
+  },
+  cupRoundChip: {
+    minHeight: 44,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cupRoundChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  cupRoundChipText: {
+    fontSize: 14,
+    fontWeight: '800' as const,
+    color: Colors.textSecondary,
+  },
+  cupRoundChipTextActive: {
+    color: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
