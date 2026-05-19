@@ -109,9 +109,11 @@ export interface APICompetitionDetail {
     id: number;
     name: string;
     logo?: string;
+    format?: 'league' | 'cup';
   };
   matchdays: {
     matchday: number;
+    label?: string;
     matches: APIMatch[];
   }[];
   standings: {

@@ -106,20 +106,24 @@ export default function CompetitionDetailScreen() {
   const fallbackTitle = params.title || 'Competição';
   const compTitle = competitionDetail?.competition.name ?? fallbackTitle;
   const compLogo = competitionDetail?.competition.logo;
+  const isCupFormat = competitionDetail?.competition.format === 'cup';
 
   const matchdayOptions = useMemo((): MatchdayOption[] => {
     const available = (competitionDetail?.matchdays ?? [])
       .map((item) => Number(item.matchday ?? 0))
       .filter((item, index, array) => item > 0 && array.indexOf(item) === index)
       .sort((a, b) => a - b)
-      .map((item) => ({ value: item, label: `Jornada ${item}` }));
+      .map((item) => {
+        const label = competitionDetail?.matchdays.find((group) => Number(group.matchday ?? 0) === item)?.label;
+        return { value: item, label: label ?? (isCupFormat ? `Eliminatória ${item}` : `Jornada ${item}`) };
+      });
 
     console.log(
       `[Competition Detail] Available matchdays for ${competitionId}: ${available.map((item) => item.value).join(', ')}`,
     );
 
     return available;
-  }, [competitionDetail, competitionId]);
+  }, [competitionDetail, competitionId, isCupFormat]);
 
   const currentMatchday = useMemo(() => {
     const allMatchdays = competitionDetail?.matchdays ?? [];
@@ -158,6 +162,12 @@ export default function CompetitionDetailScreen() {
 
     return datedGroups[datedGroups.length - 1]?.matchday ?? matchdayOptions[matchdayOptions.length - 1]?.value ?? 0;
   }, [competitionDetail, matchdayOptions]);
+
+  useEffect(() => {
+    if (isCupFormat && activeTab === 'standings') {
+      setActiveTab('matches');
+    }
+  }, [activeTab, isCupFormat]);
 
   useEffect(() => {
     if (hasInitializedMatchday) {
@@ -217,7 +227,7 @@ export default function CompetitionDetailScreen() {
 
         return {
           matchday: Number(group.matchday ?? 0),
-          roundLabel: Number(group.matchday ?? 0) > 0 ? `Jornada ${group.matchday}` : 'Sem Jornada',
+          roundLabel: group.label ?? (Number(group.matchday ?? 0) > 0 ? (isCupFormat ? `Eliminatória ${group.matchday}` : `Jornada ${group.matchday}`) : isCupFormat ? 'Taça' : 'Sem Jornada'),
           dateGroups: Array.from(dateGroups.values()).sort((a, b) => {
             const aTime = getMatchTimestamp(a.matches[0]?.date);
             const bTime = getMatchTimestamp(b.matches[0]?.date);
@@ -226,7 +236,7 @@ export default function CompetitionDetailScreen() {
         };
       })
       .sort((a, b) => a.matchday - b.matchday);
-  }, [filteredMatchdays]);
+  }, [filteredMatchdays, isCupFormat]);
 
   const goBack = useCallback(() => router.back(), []);
 
@@ -273,13 +283,15 @@ export default function CompetitionDetailScreen() {
           <List size={15} color={activeTab === 'matches' ? Colors.primary : Colors.textMuted} />
           <Text style={[styles.tabText, activeTab === 'matches' && styles.tabTextActive]}>Jogos</Text>
         </Pressable>
-        <Pressable
-          style={[styles.tab, activeTab === 'standings' && styles.tabActive]}
-          onPress={() => setActiveTab('standings')}
-        >
-          <BarChart3 size={15} color={activeTab === 'standings' ? Colors.primary : Colors.textMuted} />
-          <Text style={[styles.tabText, activeTab === 'standings' && styles.tabTextActive]}>Classificação</Text>
-        </Pressable>
+        {!isCupFormat ? (
+          <Pressable
+            style={[styles.tab, activeTab === 'standings' && styles.tabActive]}
+            onPress={() => setActiveTab('standings')}
+          >
+            <BarChart3 size={15} color={activeTab === 'standings' ? Colors.primary : Colors.textMuted} />
+            <Text style={[styles.tabText, activeTab === 'standings' && styles.tabTextActive]}>Classificação</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {matchesLoading ? (
@@ -311,7 +323,7 @@ export default function CompetitionDetailScreen() {
               ) : (
                 <>
                   <View style={styles.matchdayPickerSection}>
-                    <Text style={styles.matchdayPickerLabel}>Jornada</Text>
+                    <Text style={styles.matchdayPickerLabel}>{isCupFormat ? 'Eliminatória' : 'Jornada'}</Text>
                     <Pressable
                       style={styles.matchdayDropdownTrigger}
                       onPress={() => setShowMatchdayDropdown(true)}
@@ -405,6 +417,12 @@ export default function CompetitionDetailScreen() {
                   </View>
                 </>
               )
+            ) : isCupFormat ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyIcon}>🏆</Text>
+                <Text style={styles.emptyTitle}>Formato taça</Text>
+                <Text style={styles.emptySubtitle}>Consulta os jogos por eliminatória na aba Jogos</Text>
+              </View>
             ) : standings.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyIcon}>📊</Text>
@@ -470,7 +488,7 @@ export default function CompetitionDetailScreen() {
               <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setShowMatchdayDropdown(false)} />
               <View style={[styles.dropdownSheet, { paddingBottom: insets.bottom + 16 }]}>
                 <View style={styles.dropdownHandle} />
-                <Text style={styles.dropdownTitle}>Escolher jornada</Text>
+                <Text style={styles.dropdownTitle}>{isCupFormat ? 'Escolher eliminatória' : 'Escolher jornada'}</Text>
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.dropdownOptions}>
                   {matchdayOptions.map((option) => {
                     const selected = option.value === resolvedMatchday;

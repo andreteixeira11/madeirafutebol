@@ -164,6 +164,11 @@ function normalizeText(value: string): string {
   return decodeHtmlEntities(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
+function isCupCompetitionName(value: string): boolean {
+  const normalized = normalizeText(value);
+  return normalized.includes('taca') || normalized.includes('cup');
+}
+
 interface ApiRoundInfo {
   id?: number;
   name?: string;
@@ -462,6 +467,11 @@ export async function fetchCompetitionDetail(
   const standings = Array.isArray(standingsRaw) ? (standingsRaw as ApiStandingPayload[]) : [];
   const rounds = Array.isArray(roundsRaw) ? (roundsRaw as ApiRoundInfo[]) : [];
   const competitionRecord = competitions.find((item) => Number(item.id ?? 0) === competitionId);
+  const competitionName = getSafeString(
+    competitionRecord?.name,
+    getSafeString(competitionRecord?.title, 'Competição'),
+  );
+  const isCupFormat = isCupCompetitionName(competitionName);
 
   const roundMap = new Map<number, string>();
   rounds.forEach((round) => {
@@ -501,19 +511,20 @@ export async function fetchCompetitionDetail(
     .sort((a, b) => a[0] - b[0])
     .map(([matchdayNumber, bucket]) => ({
       matchday: matchdayNumber,
+      label: isCupFormat
+        ? roundMap.get(matchdayNumber) ?? (matchdayNumber > 0 ? `Eliminatória ${matchdayNumber}` : 'Taça')
+        : `Jornada ${matchdayNumber}`,
       matches: [...bucket].sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date)),
     }));
 
   return {
     competition: {
       id: competitionId,
-      name: getSafeString(
-        competitionRecord?.name,
-        getSafeString(competitionRecord?.title, 'Competição'),
-      ),
+      name: competitionName,
       logo: getSafeString(competitionRecord?.logo),
+      format: isCupFormat ? 'cup' : 'league',
     },
     matchdays,
-    standings: standings as APICompetitionDetail['standings'],
+    standings: isCupFormat ? [] : (standings as APICompetitionDetail['standings']),
   };
 }
