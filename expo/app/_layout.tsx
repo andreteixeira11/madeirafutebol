@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Image } from 'expo-image';
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useState } from "react";
-import { View, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import Colors from "@/constants/colors";
@@ -30,27 +30,63 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [showLaunchScreen, setShowLaunchScreen] = useState<boolean>(true);
+  const [isVisible, setIsVisible] = useState<boolean>(true);
+  const logoScale = useRef(new Animated.Value(0.3)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const splashOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     void SplashScreen.hideAsync();
-    const timeout = setTimeout(() => {
-      setShowLaunchScreen(false);
-    }, 650);
 
-    return () => clearTimeout(timeout);
+    Animated.sequence([
+      Animated.parallel([
+        Animated.spring(logoScale, {
+          toValue: 1,
+          friction: 4,
+          tension: 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(1400),
+      Animated.timing(splashOpacity, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsVisible(false);
+    });
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
       <OneSignalProvider>
         <GestureHandlerRootView style={styles.root}>
-          <StatusBar style="dark" />
+          <StatusBar style="light" />
           <RootLayoutNav />
-          {showLaunchScreen ? (
-            <View style={styles.launchScreen} pointerEvents="none">
-              <Image source={{ uri: APP_LOGO_URL }} style={styles.launchLogo} contentFit="contain" />
-            </View>
+          {isVisible ? (
+            <Animated.View
+              style={[styles.launchScreen, { opacity: splashOpacity }]}
+              pointerEvents="none"
+            >
+              <Animated.View
+                style={{
+                  opacity: logoOpacity,
+                  transform: [{ scale: logoScale }],
+                }}
+              >
+                <Image
+                  source={{ uri: APP_LOGO_URL }}
+                  style={styles.launchLogo}
+                  contentFit="contain"
+                />
+              </Animated.View>
+            </Animated.View>
           ) : null}
         </GestureHandlerRootView>
       </OneSignalProvider>
@@ -64,12 +100,12 @@ const styles = StyleSheet.create({
   },
   launchScreen: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   launchLogo: {
-    width: 140,
-    height: 140,
+    width: 150,
+    height: 150,
   },
 });
