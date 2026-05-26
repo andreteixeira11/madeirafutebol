@@ -15,7 +15,7 @@ import { ArrowLeft, Clock, MapPin, Trophy } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { APIMatch } from '@/types/football';
-import { extractScore, isMatchFinished, isMatchLive, fetchCompetitionStandings } from '@/utils/scores';
+import { extractScore, isMatchFinished, isMatchLive, fetchCompetitionStandings, isCupCompetitionName } from '@/utils/scores';
 
 function formatFullDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -89,6 +89,10 @@ export default function MatchDetailScreen() {
   const compLogo = params.compLogo;
   const competitionId = Number(params.competitionId ?? match?.competition_id ?? 0);
   const goBack = useCallback(() => router.back(), []);
+  const isCup = useMemo(() => {
+    return isCupCompetitionName(compName);
+  }, [compName]);
+
   const matchdayLabel = useMemo(() => {
     if (typeof params.matchdayLabel === 'string' && params.matchdayLabel.trim().length > 0) {
       return params.matchdayLabel.trim();
@@ -96,16 +100,16 @@ export default function MatchDetailScreen() {
 
     const rawMatchday = Number(match?.matchday ?? 0);
     if (rawMatchday > 0) {
-      return `Jornada ${rawMatchday}`;
+      return isCup ? `Eliminatória ${rawMatchday}` : `Jornada ${rawMatchday}`;
     }
 
     return null;
-  }, [match?.matchday, params.matchdayLabel]);
+  }, [match?.matchday, params.matchdayLabel, isCup]);
 
   const { data: standings, isLoading: standingsLoading, refetch, isRefetching } = useQuery({
     queryKey: ['competition-standings', competitionId],
     queryFn: () => fetchCompetitionStandings(competitionId),
-    enabled: competitionId > 0,
+    enabled: competitionId > 0 && !isCup,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
     refetchIntervalInBackground: true,
@@ -220,51 +224,53 @@ export default function MatchDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.standingsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Classificação</Text>
-          </View>
+        {!isCup ? (
+          <View style={styles.standingsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Classificação</Text>
+            </View>
 
-          {standingsLoading ? (
-            <View style={styles.standingsLoading}>
-              <ActivityIndicator size="small" color={Colors.primary} />
-              <Text style={styles.standingsLoadingText}>A carregar classificação...</Text>
-            </View>
-          ) : !standings || standings.length === 0 ? (
-            <View style={styles.standingsEmpty}>
-              <Text style={styles.standingsEmptyText}>Classificação indisponível.</Text>
-            </View>
-          ) : (
-            <View style={styles.standingsCard}>
-              <View style={styles.standingsHeaderRow}>
-                <Text style={[styles.stHeaderText, { width: 28, textAlign: 'center' as const }]}>#</Text>
-                <Text style={[styles.stHeaderText, { flex: 1 }]}>Equipa</Text>
-                <Text style={[styles.stHeaderText, styles.stCol]}>J</Text>
-                <Text style={[styles.stHeaderText, styles.stCol]}>DG</Text>
-                <Text style={[styles.stHeaderText, styles.stColPts]}>Pts</Text>
+            {standingsLoading ? (
+              <View style={styles.standingsLoading}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.standingsLoadingText}>A carregar classificação...</Text>
               </View>
-              {standings.map((row, idx) => (
-                <View key={row.teamId} style={[styles.stRow, idx % 2 === 0 && styles.stRowAlt]}>
-                  <Text style={[styles.stPos, idx < 3 && styles.stPosTop]}>{idx + 1}</Text>
-                  <View style={styles.stTeam}>
-                    <TeamLogo uri={row.teamLogo} fallback={row.teamName} size={18} />
-                    <Text style={styles.stTeamName} numberOfLines={1}>{row.teamName}</Text>
-                  </View>
-                  <Text style={[styles.stStat, styles.stCol]}>{row.played}</Text>
-                  <Text style={[
-                    styles.stStat,
-                    styles.stCol,
-                    row.goalDifference > 0 && styles.stPositive,
-                    row.goalDifference < 0 && styles.stNegative,
-                  ]}>
-                    {row.goalDifference > 0 ? '+' : ''}{row.goalDifference}
-                  </Text>
-                  <Text style={[styles.stPts, styles.stColPts]}>{row.points}</Text>
+            ) : !standings || standings.length === 0 ? (
+              <View style={styles.standingsEmpty}>
+                <Text style={styles.standingsEmptyText}>Classificação indisponível.</Text>
+              </View>
+            ) : (
+              <View style={styles.standingsCard}>
+                <View style={styles.standingsHeaderRow}>
+                  <Text style={[styles.stHeaderText, { width: 28, textAlign: 'center' as const }]}>#</Text>
+                  <Text style={[styles.stHeaderText, { flex: 1 }]}>Equipa</Text>
+                  <Text style={[styles.stHeaderText, styles.stCol]}>J</Text>
+                  <Text style={[styles.stHeaderText, styles.stCol]}>DG</Text>
+                  <Text style={[styles.stHeaderText, styles.stColPts]}>Pts</Text>
                 </View>
-              ))}
-            </View>
-          )}
-        </View>
+                {standings.map((row, idx) => (
+                  <View key={row.teamId} style={[styles.stRow, idx % 2 === 0 && styles.stRowAlt]}>
+                    <Text style={[styles.stPos, idx < 3 && styles.stPosTop]}>{idx + 1}</Text>
+                    <View style={styles.stTeam}>
+                      <TeamLogo uri={row.teamLogo} fallback={row.teamName} size={18} />
+                      <Text style={styles.stTeamName} numberOfLines={1}>{row.teamName}</Text>
+                    </View>
+                    <Text style={[styles.stStat, styles.stCol]}>{row.played}</Text>
+                    <Text style={[
+                      styles.stStat,
+                      styles.stCol,
+                      row.goalDifference > 0 && styles.stPositive,
+                      row.goalDifference < 0 && styles.stNegative,
+                    ]}>
+                      {row.goalDifference > 0 ? '+' : ''}{row.goalDifference}
+                    </Text>
+                    <Text style={[styles.stPts, styles.stColPts]}>{row.points}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );

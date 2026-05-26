@@ -164,7 +164,7 @@ function normalizeText(value: string): string {
   return decodeHtmlEntities(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
-function isCupCompetitionName(value: string): boolean {
+export function isCupCompetitionName(value: string): boolean {
   const normalized = normalizeText(value);
   return normalized.includes('taca') || normalized.includes('cup');
 }

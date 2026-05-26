@@ -67,7 +67,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <OneSignalProvider>
         <GestureHandlerRootView style={styles.root}>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <RootLayoutNav />
           {isVisible ? (
             <Animated.View
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   launchScreen: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
