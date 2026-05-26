@@ -104,6 +104,11 @@ export interface StandingRow {
   points: number;
 }
 
+export interface CupRound {
+  id: number;
+  name: string;
+}
+
 export interface APICompetitionDetail {
   competition: {
     id: number;
@@ -116,6 +121,7 @@ export interface APICompetitionDetail {
     label?: string;
     matches: APIMatch[];
   }[];
+  cupRounds?: CupRound[];
   standings: {
     team?: string;
     team_name?: string;

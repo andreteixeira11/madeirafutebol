@@ -6,6 +6,7 @@ import {
   COMPETITION_CATEGORIES,
   FEATURED_COMPETITIONS,
   StandingRow,
+  CupRound,
 } from '@/types/football';
 
 export interface CompetitionInfo {
@@ -484,27 +485,27 @@ export async function fetchCompetitionDetail(
   const matchdayMap = new Map<number, APIMatch[]>();
 
   matches.forEach((match) => {
-    const matchdayValue = Number(match.matchday ?? match.round_id ?? 0);
-    const resolvedMatchday = Number.isNaN(matchdayValue) ? 0 : matchdayValue;
-    const fallbackRoundId = match.round_id ?? (resolvedMatchday || '');
+    const rawMatchday = Number(match.matchday ?? 0);
+    const rawRoundId = Number(match.round_id ?? 0);
+
+    // For cups: group by round_id (matchday is usually 0)
+    // For leagues: group by matchday
+    const groupingKey = isCupFormat && rawRoundId > 0
+      ? rawRoundId
+      : Number.isNaN(rawMatchday) ? 0 : rawMatchday;
 
     const enrichedMatch: APIMatch = {
       ...match,
       competition_id: Number(match.competition_id ?? competitionId),
-      matchday: resolvedMatchday,
-      round_id: String(fallbackRoundId),
+      matchday: groupingKey,
+      round_id: String(match.round_id ?? groupingKey),
       title: match.title ?? `${match.team1} x ${match.team2}`,
       result_final: match.result_final ?? match.score ?? null,
     };
 
-    if (resolvedMatchday > 0 && roundMap.has(resolvedMatchday)) {
-      enrichedMatch.round_id = roundMap.get(resolvedMatchday) ?? enrichedMatch.round_id;
-    }
-
-    const bucketKey = resolvedMatchday > 0 ? resolvedMatchday : 0;
-    const bucket = matchdayMap.get(bucketKey) ?? [];
+    const bucket = matchdayMap.get(groupingKey) ?? [];
     bucket.push(enrichedMatch);
-    matchdayMap.set(bucketKey, bucket);
+    matchdayMap.set(groupingKey, bucket);
   });
 
   const matchdays = Array.from(matchdayMap.entries())
@@ -517,6 +518,20 @@ export async function fetchCompetitionDetail(
       matches: [...bucket].sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date)),
     }));
 
+  // For cups, include all rounds from the API (even those without matches)
+  const cupRounds: CupRound[] = isCupFormat
+    ? rounds
+        .filter((r) => {
+          const id = Number(r.id ?? 0);
+          return id > 0;
+        })
+        .sort((a, b) => Number(a.id ?? 0) - Number(b.id ?? 0))
+        .map((r) => ({
+          id: Number(r.id ?? 0),
+          name: decodeHtmlEntities(String(r.name ?? `Eliminatória ${r.id}`)),
+        }))
+    : undefined;
+
   return {
     competition: {
       id: competitionId,
@@ -525,6 +540,7 @@ export async function fetchCompetitionDetail(
       format: isCupFormat ? 'cup' : 'league',
     },
     matchdays,
+    cupRounds,
     standings: isCupFormat ? [] : (standings as APICompetitionDetail['standings']),
   };
 }

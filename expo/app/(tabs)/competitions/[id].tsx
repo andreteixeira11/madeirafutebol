@@ -109,13 +109,28 @@ export default function CompetitionDetailScreen() {
   const isCupFormat = competitionDetail?.competition.format === 'cup';
 
   const matchdayOptions = useMemo((): MatchdayOption[] => {
+    // For cups: build options from the rounds API (shows ALL rounds, even those without matches)
+    if (isCupFormat && competitionDetail?.cupRounds && competitionDetail.cupRounds.length > 0) {
+      const options = competitionDetail.cupRounds.map((round) => ({
+        value: round.id,
+        label: round.name,
+      }));
+
+      console.log(
+        `[Competition Detail] Cup rounds for ${competitionId}: ${options.map((o) => o.value).join(', ')}`,
+      );
+
+      return options;
+    }
+
+    // For leagues: build options from returned matchdays
     const available = (competitionDetail?.matchdays ?? [])
       .map((item) => Number(item.matchday ?? 0))
       .filter((item, index, array) => item > 0 && array.indexOf(item) === index)
       .sort((a, b) => a - b)
       .map((item) => {
         const label = competitionDetail?.matchdays.find((group) => Number(group.matchday ?? 0) === item)?.label;
-        return { value: item, label: label ?? (isCupFormat ? `Eliminatória ${item}` : `Jornada ${item}`) };
+        return { value: item, label: label ?? `Jornada ${item}` };
       });
 
     console.log(
@@ -128,6 +143,10 @@ export default function CompetitionDetailScreen() {
   const currentMatchday = useMemo(() => {
     const allMatchdays = competitionDetail?.matchdays ?? [];
     if (allMatchdays.length === 0) {
+      // For cups with no matches loaded, default to the last round
+      if (isCupFormat && matchdayOptions.length > 0) {
+        return matchdayOptions[matchdayOptions.length - 1].value;
+      }
       return 0;
     }
 
@@ -161,7 +180,7 @@ export default function CompetitionDetailScreen() {
     }
 
     return datedGroups[datedGroups.length - 1]?.matchday ?? matchdayOptions[matchdayOptions.length - 1]?.value ?? 0;
-  }, [competitionDetail, matchdayOptions]);
+  }, [competitionDetail, matchdayOptions, isCupFormat]);
 
   useEffect(() => {
     if (isCupFormat && activeTab === 'standings') {
@@ -262,8 +281,107 @@ export default function CompetitionDetailScreen() {
     [compLogo, compTitle, competitionId],
   );
 
+  const renderCupRoundChips = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.cupRoundsList}
+    >
+      {matchdayOptions.map((option) => {
+        const selected = option.value === resolvedMatchday;
+        return (
+          <Pressable
+            key={option.value}
+            style={[styles.cupRoundChip, selected && styles.cupRoundChipActive]}
+            onPress={() => handleSelectMatchday(option.value)}
+            testID={`cup-round-option-${option.value}`}
+          >
+            <Text style={[styles.cupRoundChipText, selected && styles.cupRoundChipTextActive]}>
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+
+  const renderLeagueDropdown = () => (
+    <Pressable
+      style={styles.matchdayDropdownTrigger}
+      onPress={() => setShowMatchdayDropdown(true)}
+      testID="matchday-dropdown-trigger"
+    >
+      <Text style={styles.matchdayDropdownText}>{selectedMatchdayLabel}</Text>
+      <ChevronDown size={18} color={Colors.primary} />
+    </Pressable>
+  );
+
+  const renderMatchCard = (match: APIMatch, roundLabel: string, mIdx: number, totalInGroup: number) => {
+    const score = extractScore(match);
+    const finished = isMatchFinished(match);
+    const isLive = isMatchLive(match);
+    const homeWin = score
+      ? score.home > score.away
+      : match.winner_team_id === match.team1_id;
+    const awayWin = score
+      ? score.away > score.home
+      : match.winner_team_id === match.team2_id;
+
+    return (
+      <View key={match.id}>
+        <Pressable
+          style={styles.matchRow}
+          onPress={() => handleMatchPress(match, roundLabel)}
+          testID={`match-${match.id}`}
+        >
+          <View style={styles.matchTeamsCol}>
+            <View style={styles.matchMetaRow}>
+              <Text style={styles.matchTimeText}>{formatMatchTime(match.date)}</Text>
+            </View>
+            <View style={styles.matchTeamRow}>
+              <TeamLogo uri={match.team1_logo} fallback={match.team1} size={20} />
+              <Text
+                style={[styles.matchTeamName, homeWin && finished && styles.winnerName]}
+                numberOfLines={1}
+              >
+                {match.team1}
+              </Text>
+            </View>
+            <View style={styles.matchTeamRow}>
+              <TeamLogo uri={match.team2_logo} fallback={match.team2} size={20} />
+              <Text
+                style={[styles.matchTeamName, awayWin && finished && styles.winnerName]}
+                numberOfLines={1}
+              >
+                {match.team2}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.matchScoreCol}>
+            {isLive ? (
+              <View style={styles.liveBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveText}>{match.playtime || 'LIVE'}</Text>
+              </View>
+            ) : score ? (
+              <>
+                <Text style={[styles.scoreNum, homeWin && styles.winnerScore]}>{score.home}</Text>
+                <Text style={[styles.scoreNum, awayWin && styles.winnerScore]}>{score.away}</Text>
+              </>
+            ) : finished ? (
+              <Text style={styles.ftText}>FT</Text>
+            ) : (
+              <Text style={styles.vsLabel}>vs</Text>
+            )}
+          </View>
+        </Pressable>
+        {mIdx < totalInGroup - 1 ? <View style={styles.matchDivider} /> : null}
+      </View>
+    );
+  };
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}> 
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
         <Pressable onPress={goBack} style={styles.backBtn} testID="back-btn">
           <ArrowLeft size={22} color={Colors.text} />
@@ -314,50 +432,30 @@ export default function CompetitionDetailScreen() {
             }
           >
             {activeTab === 'matches' ? (
-              !compMatches || compMatches.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyIcon}>⚽</Text>
-                  <Text style={styles.emptyTitle}>Sem jogos</Text>
-                  <Text style={styles.emptySubtitle}>Nenhum jogo registado nesta competição</Text>
-                </View>
-              ) : (
-                <>
+              <>
+                {/* Always show the round/matchday picker when there are options */}
+                {matchdayOptions.length > 0 && (
                   <View style={styles.matchdayPickerSection}>
-                    <Text style={styles.matchdayPickerLabel}>{isCupFormat ? 'Escolhe a eliminatória' : 'Jornada'}</Text>
-                    {isCupFormat ? (
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.cupRoundsList}
-                      >
-                        {matchdayOptions.map((option) => {
-                          const selected = option.value === resolvedMatchday;
-                          return (
-                            <Pressable
-                              key={option.value}
-                              style={[styles.cupRoundChip, selected && styles.cupRoundChipActive]}
-                              onPress={() => handleSelectMatchday(option.value)}
-                              testID={`cup-round-option-${option.value}`}
-                            >
-                              <Text style={[styles.cupRoundChipText, selected && styles.cupRoundChipTextActive]}>
-                                {option.label}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    ) : (
-                      <Pressable
-                        style={styles.matchdayDropdownTrigger}
-                        onPress={() => setShowMatchdayDropdown(true)}
-                        testID="matchday-dropdown-trigger"
-                      >
-                        <Text style={styles.matchdayDropdownText}>{selectedMatchdayLabel}</Text>
-                        <ChevronDown size={18} color={Colors.primary} />
-                      </Pressable>
-                    )}
+                    <Text style={styles.matchdayPickerLabel}>
+                      {isCupFormat ? 'Escolhe a eliminatória' : 'Jornada'}
+                    </Text>
+                    {isCupFormat ? renderCupRoundChips() : renderLeagueDropdown()}
                   </View>
+                )}
 
+                {!compMatches || compMatches.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyIcon}>⚽</Text>
+                    <Text style={styles.emptyTitle}>
+                      {isCupFormat ? 'Sem jogos nesta eliminatória' : 'Sem jogos'}
+                    </Text>
+                    <Text style={styles.emptySubtitle}>
+                      {isCupFormat
+                        ? 'Esta eliminatória ainda não tem jogos disponíveis'
+                        : 'Nenhum jogo registado nesta competição'}
+                    </Text>
+                  </View>
+                ) : (
                   <View style={styles.roundsContainer}>
                     {matchesByRound.map((group) => (
                       <View key={group.roundLabel} style={styles.roundCard}>
@@ -371,76 +469,16 @@ export default function CompetitionDetailScreen() {
                               <Text style={styles.dateGroupTitle}>{dateGroup.label}</Text>
                             </View>
 
-                            {dateGroup.matches.map((match, mIdx) => {
-                              const score = extractScore(match);
-                              const finished = isMatchFinished(match);
-                              const isLive = isMatchLive(match);
-                              const homeWin = score
-                                ? score.home > score.away
-                                : match.winner_team_id === match.team1_id;
-                              const awayWin = score
-                                ? score.away > score.home
-                                : match.winner_team_id === match.team2_id;
-
-                              return (
-                                <View key={match.id}>
-                                  <Pressable
-                                    style={styles.matchRow}
-                                    onPress={() => handleMatchPress(match, group.roundLabel)}
-                                    testID={`match-${match.id}`}
-                                  >
-                                    <View style={styles.matchTeamsCol}>
-                                      <View style={styles.matchMetaRow}>
-                                        <Text style={styles.matchTimeText}>{formatMatchTime(match.date)}</Text>
-                                      </View>
-                                      <View style={styles.matchTeamRow}>
-                                        <TeamLogo uri={match.team1_logo} fallback={match.team1} size={20} />
-                                        <Text
-                                          style={[styles.matchTeamName, homeWin && finished && styles.winnerName]}
-                                          numberOfLines={1}
-                                        >
-                                          {match.team1}
-                                        </Text>
-                                      </View>
-                                      <View style={styles.matchTeamRow}>
-                                        <TeamLogo uri={match.team2_logo} fallback={match.team2} size={20} />
-                                        <Text
-                                          style={[styles.matchTeamName, awayWin && finished && styles.winnerName]}
-                                          numberOfLines={1}
-                                        >
-                                          {match.team2}
-                                        </Text>
-                                      </View>
-                                    </View>
-                                    <View style={styles.matchScoreCol}>
-                                      {isLive ? (
-                                        <View style={styles.liveBadge}>
-                                          <View style={styles.liveDot} />
-                                          <Text style={styles.liveText}>{match.playtime || 'LIVE'}</Text>
-                                        </View>
-                                      ) : score ? (
-                                        <>
-                                          <Text style={[styles.scoreNum, homeWin && styles.winnerScore]}>{score.home}</Text>
-                                          <Text style={[styles.scoreNum, awayWin && styles.winnerScore]}>{score.away}</Text>
-                                        </>
-                                      ) : finished ? (
-                                        <Text style={styles.ftText}>FT</Text>
-                                      ) : (
-                                        <Text style={styles.vsLabel}>vs</Text>
-                                      )}
-                                    </View>
-                                  </Pressable>
-                                  {mIdx < dateGroup.matches.length - 1 ? <View style={styles.matchDivider} /> : null}
-                                </View>
-                              );
-                            })}
+                            {dateGroup.matches.map((match, mIdx) =>
+                              renderMatchCard(match, group.roundLabel, mIdx, dateGroup.matches.length),
+                            )}
                           </View>
                         ))}
                       </View>
                     ))}
                   </View>
-                </>
-              )
+                )}
+              </>
             ) : isCupFormat ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyIcon}>🏆</Text>
