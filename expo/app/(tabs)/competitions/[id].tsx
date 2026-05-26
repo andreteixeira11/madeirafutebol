@@ -183,12 +183,6 @@ export default function CompetitionDetailScreen() {
   }, [competitionDetail, matchdayOptions, isCupFormat]);
 
   useEffect(() => {
-    if (isCupFormat && activeTab === 'standings') {
-      setActiveTab('matches');
-    }
-  }, [activeTab, isCupFormat]);
-
-  useEffect(() => {
     if (hasInitializedMatchday) {
       return;
     }
@@ -393,15 +387,15 @@ export default function CompetitionDetailScreen() {
         <View style={styles.backBtn} />
       </View>
 
-      <View style={styles.tabBar}>
-        <Pressable
-          style={[styles.tab, activeTab === 'matches' && styles.tabActive]}
-          onPress={() => setActiveTab('matches')}
-        >
-          <List size={15} color={activeTab === 'matches' ? Colors.primary : Colors.textMuted} />
-          <Text style={[styles.tabText, activeTab === 'matches' && styles.tabTextActive]}>Jogos</Text>
-        </Pressable>
-        {!isCupFormat ? (
+      {!isCupFormat ? (
+        <View style={styles.tabBar}>
+          <Pressable
+            style={[styles.tab, activeTab === 'matches' && styles.tabActive]}
+            onPress={() => setActiveTab('matches')}
+          >
+            <List size={15} color={activeTab === 'matches' ? Colors.primary : Colors.textMuted} />
+            <Text style={[styles.tabText, activeTab === 'matches' && styles.tabTextActive]}>Jogos</Text>
+          </Pressable>
           <Pressable
             style={[styles.tab, activeTab === 'standings' && styles.tabActive]}
             onPress={() => setActiveTab('standings')}
@@ -409,8 +403,8 @@ export default function CompetitionDetailScreen() {
             <BarChart3 size={15} color={activeTab === 'standings' ? Colors.primary : Colors.textMuted} />
             <Text style={[styles.tabText, activeTab === 'standings' && styles.tabTextActive]}>Classificação</Text>
           </Pressable>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
 
       {matchesLoading ? (
         <View style={styles.loadingContainer}>
@@ -431,28 +425,21 @@ export default function CompetitionDetailScreen() {
               />
             }
           >
-            {activeTab === 'matches' ? (
+            {isCupFormat ? (
               <>
-                {/* Always show the round/matchday picker when there are options */}
                 {matchdayOptions.length > 0 && (
                   <View style={styles.matchdayPickerSection}>
-                    <Text style={styles.matchdayPickerLabel}>
-                      {isCupFormat ? 'Escolhe a eliminatória' : 'Jornada'}
-                    </Text>
-                    {isCupFormat ? renderCupRoundChips() : renderLeagueDropdown()}
+                    <Text style={styles.matchdayPickerLabel}>Escolhe a eliminatória</Text>
+                    {renderCupRoundChips()}
                   </View>
                 )}
 
                 {!compMatches || compMatches.length === 0 ? (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyIcon}>⚽</Text>
-                    <Text style={styles.emptyTitle}>
-                      {isCupFormat ? 'Sem jogos nesta eliminatória' : 'Sem jogos'}
-                    </Text>
+                    <Text style={styles.emptyTitle}>Sem jogos nesta eliminatória</Text>
                     <Text style={styles.emptySubtitle}>
-                      {isCupFormat
-                        ? 'Esta eliminatória ainda não tem jogos disponíveis'
-                        : 'Nenhum jogo registado nesta competição'}
+                      Esta eliminatória ainda não tem jogos disponíveis
                     </Text>
                   </View>
                 ) : (
@@ -479,12 +466,47 @@ export default function CompetitionDetailScreen() {
                   </View>
                 )}
               </>
-            ) : isCupFormat ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>🏆</Text>
-                <Text style={styles.emptyTitle}>Formato taça</Text>
-                <Text style={styles.emptySubtitle}>Consulta os jogos por eliminatória na aba Jogos</Text>
-              </View>
+            ) : activeTab === 'matches' ? (
+              <>
+                {matchdayOptions.length > 0 && (
+                  <View style={styles.matchdayPickerSection}>
+                    <Text style={styles.matchdayPickerLabel}>Jornada</Text>
+                    {renderLeagueDropdown()}
+                  </View>
+                )}
+
+                {!compMatches || compMatches.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyIcon}>⚽</Text>
+                    <Text style={styles.emptyTitle}>Sem jogos</Text>
+                    <Text style={styles.emptySubtitle}>
+                      Nenhum jogo registado nesta competição
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.roundsContainer}>
+                    {matchesByRound.map((group) => (
+                      <View key={group.roundLabel} style={styles.roundCard}>
+                        <View style={styles.roundHeader}>
+                          <Text style={styles.roundTitle}>{group.roundLabel}</Text>
+                        </View>
+
+                        {group.dateGroups.map((dateGroup) => (
+                          <View key={`${group.roundLabel}-${dateGroup.key}`}>
+                            <View style={styles.dateGroupHeader}>
+                              <Text style={styles.dateGroupTitle}>{dateGroup.label}</Text>
+                            </View>
+
+                            {dateGroup.matches.map((match, mIdx) =>
+                              renderMatchCard(match, group.roundLabel, mIdx, dateGroup.matches.length),
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
             ) : standings.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyIcon}>📊</Text>
