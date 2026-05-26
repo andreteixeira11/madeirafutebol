@@ -32,7 +32,7 @@ function formatTime(dateStr: string): string {
   return d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 }
 
-function TeamLogo({ uri, fallback, size = 52 }: { uri?: string; fallback: string; size?: number }) {
+function TeamLogo({ uri, fallback, size = 40 }: { uri?: string; fallback: string; size?: number }) {
   if (uri) {
     return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: 8 }} resizeMode="contain" />;
   }
@@ -180,7 +180,7 @@ export default function MatchDetailScreen() {
 
           <View style={styles.matchupRow}>
             <View style={styles.matchTeamCol}>
-              <TeamLogo uri={match.team1_logo} fallback={match.team1} size={52} />
+              <TeamLogo uri={match.team1_logo} fallback={match.team1} size={40} />
               <Text style={[styles.matchTeamName, homeWin && styles.winnerText]} numberOfLines={2}>
                 {match.team1}
               </Text>
@@ -199,7 +199,7 @@ export default function MatchDetailScreen() {
             </View>
 
             <View style={styles.matchTeamCol}>
-              <TeamLogo uri={match.team2_logo} fallback={match.team2} size={52} />
+              <TeamLogo uri={match.team2_logo} fallback={match.team2} size={40} />
               <Text style={[styles.matchTeamName, awayWin && styles.winnerText]} numberOfLines={2}>
                 {match.team2}
               </Text>
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   scoreBig: {
-    fontSize: 36,
+    fontSize: 28,
     fontWeight: '700' as const,
     color: Colors.textSecondary,
   },
@@ -432,12 +432,12 @@ const styles = StyleSheet.create({
     fontWeight: '900' as const,
   },
   scoreSeparator: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '300' as const,
     color: Colors.textMuted,
   },
   vsText: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600' as const,
     color: Colors.textMuted,
   },

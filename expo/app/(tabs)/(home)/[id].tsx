@@ -20,17 +20,14 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 function stripHtml(html: string): string {
   return html
     .replace(/<[^>]*>/g, '')
+    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#8217;/g, "'")
-    .replace(/&#8220;/g, '\u201C')
-    .replace(/&#8221;/g, '\u201D')
-    .replace(/&#8211;/g, '\u2013')
-    .replace(/&hellip;/g, '\u2026')
-    .replace(/&#8230;/g, '\u2026')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&hellip;/g, '\u2026')
     .replace(/\n\s*\n/g, '\n\n')
     .trim();
 }

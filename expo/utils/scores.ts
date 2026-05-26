@@ -151,13 +151,14 @@ function getSafeString(value: unknown, fallback = ''): string {
 
 function decodeHtmlEntities(value: string): string {
   return value
-    .replace(/&#8220;/g, '“')
-    .replace(/&#8221;/g, '”')
-    .replace(/&#8217;/g, "'")
+    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, '&')
-    .replace(/&#8211;/g, '–')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&hellip;/g, '\u2026')
     .trim();
 }
 

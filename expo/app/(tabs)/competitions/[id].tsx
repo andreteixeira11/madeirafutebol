@@ -805,10 +805,10 @@ const styles = StyleSheet.create({
     color: '#EF4444',
   },
   scoreNum: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700' as const,
     color: Colors.textSecondary,
-    lineHeight: 21,
+    lineHeight: 18,
   },
   winnerScore: {
     color: Colors.text,
