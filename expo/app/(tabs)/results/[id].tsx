@@ -15,7 +15,7 @@ import { ArrowLeft, Clock, MapPin, Trophy } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { APIMatch } from '@/types/football';
-import { extractScore, isMatchFinished, isMatchLive, fetchCompetitionStandings, isCupCompetitionName } from '@/utils/scores';
+import { extractScore, isMatchFinished, isMatchLive, fetchCompetitionStandings, isCupCompetitionName, detectKnockoutFormat } from '@/utils/scores';
 
 function formatFullDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -72,6 +72,7 @@ export default function MatchDetailScreen() {
     competitionId?: string;
     compLogo?: string;
     matchdayLabel?: string;
+    isCup?: string;
   }>();
 
   const match: APIMatch | null = useMemo(() => {
@@ -90,8 +91,16 @@ export default function MatchDetailScreen() {
   const competitionId = Number(params.competitionId ?? match?.competition_id ?? 0);
   const goBack = useCallback(() => router.back(), []);
   const isCup = useMemo(() => {
-    return isCupCompetitionName(compName);
-  }, [compName]);
+    // Explicit flag from competition screen takes priority
+    if (params.isCup === '1') return true;
+    if (params.isCup === '0') return false;
+
+    // Fallback: check name and match data
+    if (isCupCompetitionName(compName)) return true;
+    if (match && detectKnockoutFormat([match])) return true;
+
+    return false;
+  }, [compName, params.isCup, match]);
 
   const matchdayLabel = useMemo(() => {
     if (typeof params.matchdayLabel === 'string' && params.matchdayLabel.trim().length > 0) {

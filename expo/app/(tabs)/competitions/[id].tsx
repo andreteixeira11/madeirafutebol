@@ -269,10 +269,11 @@ export default function CompetitionDetailScreen() {
           competitionId: String(match.competition_id ?? competitionId),
           compLogo,
           matchdayLabel: roundLabel,
+          isCup: isCupFormat ? '1' : '0',
         },
       });
     },
-    [compLogo, compTitle, competitionId],
+    [compLogo, compTitle, competitionId, isCupFormat],
   );
 
   const renderCupRoundChips = () => (

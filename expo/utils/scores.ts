@@ -168,7 +168,32 @@ function normalizeText(value: string): string {
 
 export function isCupCompetitionName(value: string): boolean {
   const normalized = normalizeText(value);
-  return normalized.includes('taca') || normalized.includes('cup');
+  if (normalized.includes('taca') || normalized.includes('cup')) return true;
+  // Competitions with knockout final phases
+  if (normalized.includes('eliminatoria') || normalized.includes('play-off') || normalized.includes('playoff')) return true;
+  return false;
+}
+
+/** Detect knockout format from match data: most matches have round_id but no meaningful matchday */
+export function detectKnockoutFormat(matches: APIMatch[]): boolean {
+  if (matches.length === 0) return false;
+
+  let knockoutCount = 0;
+  let leagueCount = 0;
+
+  for (const match of matches) {
+    const matchday = Number(match.matchday ?? 0);
+    const roundId = Number(match.round_id ?? 0);
+
+    if (roundId > 0 && matchday === 0) {
+      knockoutCount++;
+    } else if (matchday > 0) {
+      leagueCount++;
+    }
+  }
+
+  // If most matches have round_id but no matchday, it's knockout format
+  return knockoutCount > leagueCount && knockoutCount > 0;
 }
 
 interface ApiRoundInfo {
@@ -473,7 +498,9 @@ export async function fetchCompetitionDetail(
     competitionRecord?.name,
     getSafeString(competitionRecord?.title, 'Competição'),
   );
-  const isCupFormat = isCupCompetitionName(competitionName);
+  const hasRounds = rounds.length > 0;
+  const isKnockoutByData = detectKnockoutFormat(matches);
+  const isCupFormat = isCupCompetitionName(competitionName) || isKnockoutByData;
 
   const roundMap = new Map<number, string>();
   rounds.forEach((round) => {
