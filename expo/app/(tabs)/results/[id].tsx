@@ -15,7 +15,7 @@ import { ArrowLeft, Clock, MapPin, Trophy } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { APIMatch } from '@/types/football';
-import { extractScore, isMatchFinished, isMatchLive, fetchCompetitionStandings, isCupCompetitionName, detectKnockoutFormat } from '@/utils/scores';
+import { extractScore, isMatchFinished, isMatchLive, fetchAllMatchesMerged, fetchCompetitionStandings, isCupCompetitionName, detectKnockoutFormat } from '@/utils/scores';
 
 function formatFullDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -75,7 +75,7 @@ export default function MatchDetailScreen() {
     isCup?: string;
   }>();
 
-  const match: APIMatch | null = useMemo(() => {
+  const snapshotMatch: APIMatch | null = useMemo(() => {
     if (params.matchData) {
       try {
         return JSON.parse(params.matchData) as APIMatch;
@@ -85,6 +85,26 @@ export default function MatchDetailScreen() {
     }
     return null;
   }, [params.matchData]);
+
+  const matchId = Number(params.id ?? 0);
+
+  // Live fetch: keeps the score up to date instead of showing only the navigation snapshot.
+  const { data: freshMatch } = useQuery({
+    queryKey: ['match-detail', matchId],
+    queryFn: async (): Promise<APIMatch | null> => {
+      const all = await fetchAllMatchesMerged();
+      return all.find((item) => Number(item.id) === matchId) ?? null;
+    },
+    enabled: matchId > 0,
+    staleTime: 10 * 1000,
+    refetchInterval: snapshotMatch && isMatchLive(snapshotMatch) ? 15 * 1000 : 30 * 1000,
+    refetchIntervalInBackground: true,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
+  });
+
+  const match: APIMatch | null = freshMatch ?? snapshotMatch;
 
   const compName = params.compName || '';
   const compLogo = params.compLogo;

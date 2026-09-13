@@ -344,7 +344,11 @@ export default function ResultsScreen() {
     queryKey: ['api-matches-merged'],
     queryFn: fetchAllMatchesMerged,
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasLive = Array.isArray(data) && data.some((match) => isMatchLive(match));
+      return hasLive ? 15 * 1000 : 60 * 1000;
+    },
     refetchIntervalInBackground: true,
     refetchOnMount: 'always',
     refetchOnReconnect: true,

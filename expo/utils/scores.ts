@@ -547,7 +547,7 @@ export async function fetchCompetitionDetail(
     }));
 
   // For cups, include all rounds from the API (even those without matches)
-  const cupRounds: CupRound[] = isCupFormat
+  const cupRounds: CupRound[] | undefined = isCupFormat
     ? rounds
         .filter((r) => {
           const id = Number(r.id ?? 0);

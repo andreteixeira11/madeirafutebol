@@ -96,7 +96,13 @@ export default function CompetitionDetailScreen() {
     queryFn: () => fetchCompetitionDetail(competitionId),
     enabled: !!competitionId,
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    refetchInterval: (query) => {
+      const detail = query.state.data;
+      const hasLive = (detail?.matchdays ?? []).some((group) =>
+        (group.matches ?? []).some((match) => isMatchLive(match)),
+      );
+      return hasLive ? 15 * 1000 : 60 * 1000;
+    },
     refetchIntervalInBackground: true,
     refetchOnMount: 'always',
     refetchOnReconnect: true,
@@ -156,6 +162,11 @@ export default function CompetitionDetailScreen() {
     }
 
     const now = Date.now();
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const dayStartMs = dayStart.getTime();
+    const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
+
     const datedGroups = allMatchdays
       .map((group) => {
         const timestamps = (group.matches ?? [])
@@ -168,18 +179,37 @@ export default function CompetitionDetailScreen() {
 
         return {
           matchday: Number(group.matchday ?? 0),
-          referenceTime: Math.min(...timestamps),
+          minTime: Math.min(...timestamps),
+          maxTime: Math.max(...timestamps),
         };
       })
-      .filter((group): group is { matchday: number; referenceTime: number } => !!group && group.matchday > 0)
+      .filter((group): group is { matchday: number; minTime: number; maxTime: number } =>
+        !!group && group.matchday > 0,
+      )
       .sort((a, b) => a.matchday - b.matchday);
 
-    const upcomingGroup = datedGroups.find((group) => group.referenceTime >= now);
-    if (upcomingGroup) {
-      return upcomingGroup.matchday;
+    if (datedGroups.length === 0) {
+      return matchdayOptions[matchdayOptions.length - 1]?.value ?? 0;
     }
 
-    return datedGroups[datedGroups.length - 1]?.matchday ?? matchdayOptions[matchdayOptions.length - 1]?.value ?? 0;
+    // 1. Matchday whose date span contains right now (games kicked off, still in its window)
+    const containing = datedGroups.find((group) => group.minTime <= now && now <= group.maxTime);
+    if (containing) {
+      return containing.matchday;
+    }
+
+    // 2. Matchday with games today = current matchday, even if all games already finished today
+    const todayGroup = datedGroups.find((group) => group.maxTime >= dayStartMs && group.minTime < dayEndMs);
+    if (todayGroup) {
+      return todayGroup.matchday;
+    }
+
+    // 3. Season hasn't started → first matchday; season is over → last matchday
+    if (now < datedGroups[0].minTime) {
+      return datedGroups[0].matchday;
+    }
+
+    return datedGroups[datedGroups.length - 1].matchday;
   }, [competitionDetail, matchdayOptions, isCupFormat]);
 
   useEffect(() => {
