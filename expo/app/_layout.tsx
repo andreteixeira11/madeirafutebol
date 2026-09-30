@@ -8,7 +8,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import Colors from "@/constants/colors";
 import { APP_LOGO_URL } from '@/constants/branding';
-import { OneSignalProvider } from '@/components/providers/OneSignalProvider';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -65,8 +64,7 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <OneSignalProvider>
-        <GestureHandlerRootView style={styles.root}>
+      <GestureHandlerRootView style={styles.root}>
           <StatusBar style="dark" />
           <RootLayoutNav />
           {isVisible ? (
@@ -89,7 +87,6 @@ export default function RootLayout() {
             </Animated.View>
           ) : null}
         </GestureHandlerRootView>
-      </OneSignalProvider>
     </QueryClientProvider>
   );
 }

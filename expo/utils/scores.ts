@@ -6,8 +6,18 @@ import {
   COMPETITION_CATEGORIES,
   FEATURED_COMPETITIONS,
   StandingRow,
-  CupRound,
 } from '@/types/football';
+import {
+  FPF_COMPETITIONS,
+  FPF_RESULTS_FEED_IDS,
+  FPF_SITE_BASE,
+  getFpfMetaForId,
+} from '@/utils/fpfCompetitions';
+import {
+  buildFpfMatches,
+  decodeHtmlEntities,
+  parseFpfPage,
+} from '@/utils/fpfParser';
 
 export interface CompetitionInfo {
   id: number;
@@ -16,6 +26,13 @@ export interface CompetitionInfo {
   permalink: string;
 }
 
+/**
+ * Fonte de dados:
+ * - Lista de competições (nomes/logos): API /wp-json/mf/v3/competitions do site.
+ * - Jogos, resultados e classificação: HTML renderizado pelo plugin
+ *   "FPF Jogos Madeira" nas páginas /competicoes/{slug}/ (dados de resultados.fpf.pt).
+ *   A API antiga /mf/v3/matches deixou de ter dados.
+ */
 const DEFAULT_API_BASES = [
   'https://madeirafutebol.com/wp-json/mf/v3',
   'https://www.madeirafutebol.com/wp-json/mf/v3',
@@ -27,16 +44,13 @@ const API_BASES = [envApiBase, ...DEFAULT_API_BASES].filter(
   (value, index, array) => value.length > 0 && array.indexOf(value) === index,
 );
 
-const API_HEADERS: Record<string, string> =
+const HTTP_HEADERS: Record<string, string> =
   Platform.OS === 'web'
-    ? {
-        Accept: 'application/json',
-      }
+    ? { Accept: 'text/html,application/json' }
     : {
-        Accept: 'application/json',
+        Accept: 'text/html,application/json',
         'User-Agent':
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-        Referer: 'https://www.sofascore.com/',
       };
 
 function parseApiDate(dateValue: string | null | undefined): Date | null {
@@ -82,16 +96,11 @@ async function fetchApiJson<T>(path: string): Promise<T> {
 
   for (const baseUrl of API_BASES) {
     const url = `${baseUrl}${path}`;
-    console.log(`[API] Fetching ${url}`);
 
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: API_HEADERS,
-      });
+      const response = await fetch(url, { method: 'GET', headers: HTTP_HEADERS });
 
       if (!response.ok) {
-        console.log(`[API] Request failed for ${url} with status ${response.status}`);
         lastError = new Error(`Failed to fetch ${path}: ${response.status}`);
         continue;
       }
@@ -99,13 +108,52 @@ async function fetchApiJson<T>(path: string): Promise<T> {
       return (await response.json()) as T;
     } catch (error) {
       const normalizedError = error instanceof Error ? error : new Error('Unknown request error');
-      console.log(`[API] Request exception for ${url}: ${normalizedError.message}`);
       lastError = normalizedError;
     }
   }
 
   throw lastError ?? new Error(`Failed to fetch ${path}`);
 }
+
+// ---------------------------------------------------------------------------
+// Páginas HTML do site (plugin FPF Jogos Madeira)
+// ---------------------------------------------------------------------------
+
+const PAGE_CACHE_TTL = 30 * 1000;
+const pageCache = new Map<string, { html: string; at: number }>();
+
+async function fetchFpfPage(slug: string): Promise<string> {
+  const url = `${FPF_SITE_BASE}/competicoes/${slug}/`;
+  const cached = pageCache.get(slug);
+  const now = Date.now();
+
+  if (cached && now - cached.at < PAGE_CACHE_TTL) {
+    return cached.html;
+  }
+
+  const response = await fetch(url, { method: 'GET', headers: HTTP_HEADERS });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch competition page ${slug}: ${response.status}`);
+  }
+
+  const html = await response.text();
+  pageCache.set(slug, { html, at: now });
+  return html;
+}
+
+async function fetchFpfMatchesForCompetition(competitionId: number): Promise<APIMatch[]> {
+  const meta = getFpfMetaForId(competitionId);
+  if (!meta) return [];
+
+  const html = await fetchFpfPage(meta.slug);
+  const page = parseFpfPage(html);
+  return buildFpfMatches(page.rounds, competitionId);
+}
+
+// ---------------------------------------------------------------------------
+// Utilitários
+// ---------------------------------------------------------------------------
 
 function normalizeCompetitionsPayload(raw: unknown): Record<string, unknown>[] {
   if (Array.isArray(raw)) {
@@ -126,40 +174,8 @@ function normalizeCompetitionsPayload(raw: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function normalizeMatchesPayload(raw: unknown): APIMatch[] {
-  if (Array.isArray(raw)) {
-    return raw as APIMatch[];
-  }
-
-  if (!raw || typeof raw !== 'object') return [];
-
-  const record = raw as Record<string, unknown>;
-  const candidates = [record.matches, record.results, record.data, record.items];
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate as APIMatch[];
-    }
-  }
-
-  return [];
-}
-
 function getSafeString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
-}
-
-function decodeHtmlEntities(value: string): string {
-  return value
-    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCharCode(Number(dec)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&hellip;/g, '\u2026')
-    .trim();
 }
 
 function normalizeText(value: string): string {
@@ -169,12 +185,12 @@ function normalizeText(value: string): string {
 export function isCupCompetitionName(value: string): boolean {
   const normalized = normalizeText(value);
   if (normalized.includes('taca') || normalized.includes('cup')) return true;
-  // Competitions with knockout final phases
+  // Competições com fases finais por eliminatórias
   if (normalized.includes('eliminatoria') || normalized.includes('play-off') || normalized.includes('playoff')) return true;
   return false;
 }
 
-/** Detect knockout format from match data: most matches have round_id but no meaningful matchday */
+/** Deteta formato eliminatório a partir dos jogos (mantido por compatibilidade). */
 export function detectKnockoutFormat(matches: APIMatch[]): boolean {
   if (matches.length === 0) return false;
 
@@ -192,13 +208,7 @@ export function detectKnockoutFormat(matches: APIMatch[]): boolean {
     }
   }
 
-  // If most matches have round_id but no matchday, it's knockout format
   return knockoutCount > leagueCount && knockoutCount > 0;
-}
-
-interface ApiRoundInfo {
-  id?: number;
-  name?: string;
 }
 
 interface ApiStandingPayload {
@@ -325,19 +335,32 @@ export function getCompetitionPopularityOrder(competition: CompetitionInfo): num
 }
 
 export async function fetchCompetitionsLogos(): Promise<CompetitionInfo[]> {
-  const raw = await fetchApiJson<unknown>('/competitions');
-  const data = normalizeCompetitionsPayload(raw);
+  try {
+    const raw = await fetchApiJson<unknown>('/competitions');
+    const data = normalizeCompetitionsPayload(raw);
 
-  const mapped: CompetitionInfo[] = data.map((item: Record<string, unknown>) => ({
-    id: Number(item.id ?? 0),
-    title: decodeHtmlEntities(getSafeString(item.name, getSafeString(item.title, 'Competição'))),
-    logo: getSafeString(item.logo),
-    permalink: getSafeString(item.permalink),
+    const mapped = data.map((item: Record<string, unknown>) => ({
+      id: Number(item.id ?? 0),
+      title: decodeHtmlEntities(getSafeString(item.name, getSafeString(item.title, 'Competição'))),
+      logo: getSafeString(item.logo),
+      permalink: getSafeString(item.permalink),
+    }));
+
+    if (mapped.length > 0) {
+      return mapped;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown error';
+    console.log(`[Competitions] API competitions failed (${message}), using local manifest`);
+  }
+
+  // Fallback: manifesto local das competições do site
+  return FPF_COMPETITIONS.map((meta) => ({
+    id: meta.id,
+    title: meta.name,
+    logo: meta.logo ?? '',
+    permalink: `${FPF_SITE_BASE}/competicoes/${meta.slug}/`,
   }));
-
-  console.log(`[Competitions] Fetched ${mapped.length} competitions with logos`);
-
-  return mapped;
 }
 
 export function buildCompMap(competitions: CompetitionInfo[]): {
@@ -433,142 +456,117 @@ function dedupeMatches(matches: APIMatch[]): APIMatch[] {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Jogos (feed de resultados: competições principais)
+// ---------------------------------------------------------------------------
+
 export async function fetchAllMatches(): Promise<APIMatch[]> {
-  const raw = await fetchApiJson<unknown>('/matches');
-  const data = normalizeMatchesPayload(raw);
-  console.log(`[Matches] /matches returned ${data.length} items`);
-  return dedupeMatches(data);
+  const settled = await Promise.allSettled(FPF_RESULTS_FEED_IDS.map((id) => fetchFpfMatchesForCompetition(id)));
+
+  const matches: APIMatch[] = [];
+  let lastError: unknown = null;
+
+  settled.forEach((result) => {
+    if (result.status === 'fulfilled') {
+      matches.push(...result.value);
+    } else {
+      lastError = result.reason;
+    }
+  });
+
+  if (matches.length === 0 && lastError) {
+    const message = lastError instanceof Error ? lastError.message : 'unknown error';
+    throw new Error(`Failed to fetch matches: ${message}`);
+  }
+
+  return dedupeMatches(matches);
 }
 
 export async function fetchResults(): Promise<APIMatch[]> {
-  const raw = await fetchApiJson<unknown>('/matches?status=result');
-  const data = normalizeMatchesPayload(raw);
-  console.log(`[Matches] /matches?status=result returned ${data.length} items`);
-  return dedupeMatches(data).filter((match) => isMatchFinished(match) || isMatchLive(match));
+  const matches = await fetchAllMatches();
+  return matches.filter((match) => isMatchFinished(match) || isMatchLive(match));
 }
 
 export async function fetchFixtures(): Promise<APIMatch[]> {
-  const raw = await fetchApiJson<unknown>('/matches?status=fixture');
-  const data = normalizeMatchesPayload(raw);
-  console.log(`[Matches] /matches?status=fixture returned ${data.length} items`);
-  return dedupeMatches(data);
+  return fetchAllMatches();
 }
 
 export async function fetchAllMatchesMerged(): Promise<APIMatch[]> {
-  const [results, fixtures] = await Promise.all([fetchResults(), fetchFixtures()]);
-  return dedupeMatches([...results, ...fixtures]);
+  return fetchAllMatches();
 }
 
+// ---------------------------------------------------------------------------
+// Competição individual
+// ---------------------------------------------------------------------------
+
 export async function fetchCompetitionStandings(competitionId: number): Promise<StandingRow[]> {
-  const standingsRaw = await fetchApiJson<unknown>(`/competition/${competitionId}/standings`);
-  return mapStandingsPayload(standingsRaw);
+  const meta = getFpfMetaForId(competitionId);
+  if (!meta) return [];
+
+  const html = await fetchFpfPage(meta.slug);
+  return parseFpfPage(html).standings;
 }
 
 export async function fetchCompetitionDetail(
   competitionId: number,
-  matchday?: number,
 ): Promise<APICompetitionDetail> {
-  const query = matchday ? `&matchday=${matchday}` : '';
+  const meta = getFpfMetaForId(competitionId);
 
-  const [competitionsRaw, resultsRaw, fixturesRaw, standingsRaw, roundsRaw] = await Promise.all([
-    fetchApiJson<unknown>('/competitions'),
-    fetchApiJson<unknown>(`/matches?competition_id=${competitionId}&status=result${query}`),
-    fetchApiJson<unknown>(`/matches?competition_id=${competitionId}&status=fixture${query}`),
-    fetchApiJson<unknown>(`/competition/${competitionId}/standings`),
-    fetchApiJson<unknown>(`/competition/${competitionId}/rounds`).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : 'unknown error';
-      console.log(`[Competition Detail] Failed to fetch rounds for ${competitionId}: ${message}`);
-      return [] as ApiRoundInfo[];
-    }),
-  ]);
-
-  const competitions = normalizeCompetitionsPayload(competitionsRaw);
-  const matches = dedupeMatches([
-    ...normalizeMatchesPayload(resultsRaw),
-    ...normalizeMatchesPayload(fixturesRaw),
-  ]).map((match) => ({
-    ...match,
-    competition_id: Number(match.competition_id ?? competitionId),
-  }));
-
-  const standings = Array.isArray(standingsRaw) ? (standingsRaw as ApiStandingPayload[]) : [];
-  const rounds = Array.isArray(roundsRaw) ? (roundsRaw as ApiRoundInfo[]) : [];
-  const competitionRecord = competitions.find((item) => Number(item.id ?? 0) === competitionId);
-  const competitionName = getSafeString(
-    competitionRecord?.name,
-    getSafeString(competitionRecord?.title, 'Competição'),
-  );
-  const hasRounds = rounds.length > 0;
-  const isKnockoutByData = detectKnockoutFormat(matches);
-  const isCupFormat = isCupCompetitionName(competitionName) || isKnockoutByData;
-
-  const roundMap = new Map<number, string>();
-  rounds.forEach((round) => {
-    const roundId = Number(round.id ?? 0);
-    if (roundId > 0) {
-      roundMap.set(roundId, String(round.name ?? `Jornada ${roundId}`));
-    }
-  });
-
-  const matchdayMap = new Map<number, APIMatch[]>();
-
-  matches.forEach((match) => {
-    const rawMatchday = Number(match.matchday ?? 0);
-    const rawRoundId = Number(match.round_id ?? 0);
-
-    // For cups: group by round_id (matchday is usually 0)
-    // For leagues: group by matchday
-    const groupingKey = isCupFormat && rawRoundId > 0
-      ? rawRoundId
-      : Number.isNaN(rawMatchday) ? 0 : rawMatchday;
-
-    const enrichedMatch: APIMatch = {
-      ...match,
-      competition_id: Number(match.competition_id ?? competitionId),
-      matchday: groupingKey,
-      round_id: String(match.round_id ?? groupingKey),
-      title: match.title ?? `${match.team1} x ${match.team2}`,
-      result_final: match.result_final ?? match.score ?? null,
+  if (!meta) {
+    return {
+      competition: { id: competitionId, name: 'Competição', format: 'league' },
+      matchdays: [],
+      standings: [],
     };
+  }
 
-    const bucket = matchdayMap.get(groupingKey) ?? [];
-    bucket.push(enrichedMatch);
-    matchdayMap.set(groupingKey, bucket);
+  const html = await fetchFpfPage(meta.slug);
+  const page = parseFpfPage(html);
+  const matches = buildFpfMatches(page.rounds, competitionId);
+
+  const isCupFormat =
+    isCupCompetitionName(meta.name) ||
+    (page.rounds.length > 0 && page.rounds.every((round) => round.number === null));
+
+  const matchdays = page.rounds.map((round, index) => {
+    const matchday = round.number ?? index + 1;
+    return {
+      matchday,
+      label: round.label,
+      matches: matches.filter((match) => match.matchday === matchday),
+    };
   });
 
-  const matchdays = Array.from(matchdayMap.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([matchdayNumber, bucket]) => ({
-      matchday: matchdayNumber,
-      label: isCupFormat
-        ? roundMap.get(matchdayNumber) ?? (matchdayNumber > 0 ? `Eliminatória ${matchdayNumber}` : 'Taça')
-        : `Jornada ${matchdayNumber}`,
-      matches: [...bucket].sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date)),
-    }));
-
-  // For cups, include all rounds from the API (even those without matches)
-  const cupRounds: CupRound[] | undefined = isCupFormat
-    ? rounds
-        .filter((r) => {
-          const id = Number(r.id ?? 0);
-          return id > 0;
-        })
-        .sort((a, b) => Number(a.id ?? 0) - Number(b.id ?? 0))
-        .map((r) => ({
-          id: Number(r.id ?? 0),
-          name: decodeHtmlEntities(String(r.name ?? `Eliminatória ${r.id}`)),
-        }))
+  const cupRounds = isCupFormat
+    ? page.rounds.map((round, index) => ({
+        id: round.number ?? index + 1,
+        name: round.label,
+      }))
     : undefined;
+
+  const standings = page.standings.map((row) => ({
+    team_id: row.teamId,
+    team_name: row.teamName,
+    team_logo: row.teamLogo,
+    played: row.played,
+    won: row.won,
+    drawn: row.drawn,
+    lost: row.lost,
+    goals_for: row.goalsFor,
+    goals_against: row.goalsAgainst,
+    goal_difference: row.goalDifference,
+    points: row.points,
+  }));
 
   return {
     competition: {
       id: competitionId,
-      name: competitionName,
-      logo: getSafeString(competitionRecord?.logo),
+      name: meta.name,
+      logo: meta.logo,
       format: isCupFormat ? 'cup' : 'league',
     },
     matchdays,
     cupRounds,
-    standings: isCupFormat ? [] : (standings as APICompetitionDetail['standings']),
+    standings,
   };
 }

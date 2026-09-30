@@ -168,6 +168,7 @@ export const COMPETITION_CATEGORIES: CompetitionCategory[] = [
       'ii liga',
       'campeonato de portugal',
       'liga revelação',
+      'liga next gen',
       'divisão de honra regional',
       'campeonato regional 1 divisao seniores',
       'campeonato regional 1 divisão seniores',
@@ -186,7 +187,7 @@ export const COMPETITION_CATEGORIES: CompetitionCategory[] = [
   {
     key: 'juniores',
     title: 'Juniores',
-    aliases: ['juniores', 'sub-19', 'sub 19', 'u19'],
+    aliases: ['juniores', 'sub-19', 'sub 19', 'u19', 'jun.a', 'ii divisão jun', 'ii divisao jun'],
   },
   {
     key: 'juvenis',
@@ -201,7 +202,7 @@ export const COMPETITION_CATEGORIES: CompetitionCategory[] = [
   {
     key: 'infantis',
     title: 'Infantis',
-    aliases: ['infantis'],
+    aliases: ['infantis', 'sub-11', 'sub 11', 'benjamins'],
   },
   {
     key: 'sub13',
@@ -231,10 +232,10 @@ export const COMPETITION_CATEGORIES: CompetitionCategory[] = [
 ];
 
 export const FEATURED_COMPETITIONS: FeaturedCompetition[] = [
-  { id: 1075, shortName: 'I Liga', order: 0, category: 'seniores', aliases: ['i liga', 'liga portugal betclic', 'primeira liga'] },
+  { id: 89399, shortName: 'I Liga', order: 0, category: 'seniores', aliases: ['i liga', 'liga portugal betclic', 'primeira liga'] },
   { shortName: 'II Liga', order: 1, category: 'seniores', aliases: ['ii liga', 'liga portugal 2 meu super', 'liga 2', 'segunda liga', 'meu super'] },
-  { shortName: 'Campeonato de Portugal', order: 2, category: 'seniores', aliases: ['campeonato de portugal'] },
-  { shortName: 'Liga Revelação', order: 3, category: 'seniores', aliases: ['liga revelação', 'liga revelacao'] },
+  { id: 2161, shortName: 'Campeonato de Portugal', order: 2, category: 'seniores', aliases: ['campeonato de portugal'] },
+  { id: 27629, shortName: 'Liga Next Gen', order: 3, category: 'seniores', aliases: ['liga revelação', 'liga revelacao', 'liga next gen'] },
   { id: 1, shortName: 'Divisão de Honra Regional', order: 4, category: 'seniores', aliases: ['divisão de honra regional', 'divisao de honra regional', 'divisão de honra'] },
   { id: 2, shortName: 'Campeonato Regional 1 Divisão Seniores', order: 5, category: 'seniores', aliases: ['campeonato regional 1 divisao seniores', 'campeonato regional 1 divisão seniores', '1ª divisão regional', '1 divisao regional'] },
   { shortName: 'Campeonato Nacional BPI', order: 6, category: 'femininos', aliases: ['campeonato nacional bpi', 'bpi'] },
