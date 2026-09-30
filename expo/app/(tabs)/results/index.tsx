@@ -110,7 +110,8 @@ const MatchRow = React.memo(function MatchRow({
         competitionId: String(competitionId),
         compLogo,
         matchdayLabel:
-          typeof match.matchday === 'number' && match.matchday > 0 ? `Jornada ${match.matchday}` : undefined,
+          match.round_label ??
+          (typeof match.matchday === 'number' && match.matchday > 0 ? `Jornada ${match.matchday}` : undefined),
       },
     });
   }, [match, compName, competitionId, compLogo]);

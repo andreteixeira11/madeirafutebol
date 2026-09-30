@@ -46,6 +46,8 @@ export interface APIMatch {
   events?: unknown[];
   date: string;
   permalink?: string;
+  /** Nome da jornada/eliminatória tal como aparece no plugin do site (ex.: "Jornada 5", "1.ª Eliminatória"). */
+  round_label?: string;
 }
 
 export type APIMatchesResponse = APIMatch[];
@@ -104,45 +106,28 @@ export interface StandingRow {
   points: number;
 }
 
-export interface CupRound {
+/**
+ * Jornada ou eliminatória, tal como o plugin "FPF Jogos Madeira" a renderiza:
+ * ligas têm `number` (data-fpf-jornada) e label "Jornada N";
+ * taças têm apenas o título da eliminatória ("1.ª Eliminatória") e `number` null.
+ */
+export interface CompetitionRound {
   id: number;
-  name: string;
+  label: string;
+  number: number | null;
+  matches: APIMatch[];
 }
 
-export interface APICompetitionDetail {
+/** Detalhe de competição no formato nativo do plugin (rondas + classificação). */
+export interface CompetitionDetail {
   competition: {
     id: number;
     name: string;
     logo?: string;
-    format?: 'league' | 'cup';
+    format: 'league' | 'cup';
   };
-  matchdays: {
-    matchday: number;
-    label?: string;
-    matches: APIMatch[];
-  }[];
-  cupRounds?: CupRound[];
-  standings: {
-    team?: string;
-    team_name?: string;
-    team_logo?: string;
-    points?: number;
-    played?: number;
-    won?: number;
-    wins?: number;
-    draw?: number;
-    drawn?: number;
-    draws?: number;
-    lost?: number;
-    losses?: number;
-    gf?: number;
-    goals_for?: number;
-    ga?: number;
-    goals_against?: number;
-    gd?: number;
-    goal_difference?: number;
-    team_id?: string | number;
-  }[];
+  rounds: CompetitionRound[];
+  standings: StandingRow[];
 }
 
 export interface CompetitionCategory {

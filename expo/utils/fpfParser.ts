@@ -266,6 +266,7 @@ export function buildFpfMatches(rounds: FpfRoundData[], competitionId: number): 
         competition_id: competitionId,
         matchday,
         round_id: String(matchday),
+        round_label: round.label,
         title: `${match.home} x ${match.away}`,
         team1: match.home,
         team2: match.away,

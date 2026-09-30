@@ -15,14 +15,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, List, BarChart3, ChevronDown, Check } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
-import { APIMatch } from '@/types/football';
+import { APIMatch, StandingRow } from '@/types/football';
 import {
   extractScore,
   fetchCompetitionDetail,
   getMatchTimestamp,
   isMatchFinished,
   isMatchLive,
-  mapStandingsPayload,
   parseMatchDate,
 } from '@/utils/scores';
 
@@ -76,7 +75,7 @@ interface DateMatchGroup {
   matches: APIMatch[];
 }
 
-interface MatchdayOption {
+interface RoundOption {
   value: number;
   label: string;
 }
@@ -87,19 +86,19 @@ export default function CompetitionDetailScreen() {
   const competitionId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState<TabType>('matches');
-  const [selectedMatchday, setSelectedMatchday] = useState<number | null>(null);
-  const [showMatchdayDropdown, setShowMatchdayDropdown] = useState<boolean>(false);
-  const hasInitializedMatchday = selectedMatchday !== null;
+  const [selectedRoundId, setSelectedRoundId] = useState<number | null>(null);
+  const [showRoundDropdown, setShowRoundDropdown] = useState<boolean>(false);
+  const hasInitializedRound = selectedRoundId !== null;
 
-  const { data: competitionDetail, isLoading: matchesLoading, refetch, isRefetching } = useQuery({
+  const { data: detail, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['competition-detail', competitionId],
     queryFn: () => fetchCompetitionDetail(competitionId),
     enabled: !!competitionId,
     staleTime: 30 * 1000,
     refetchInterval: (query) => {
-      const detail = query.state.data;
-      const hasLive = (detail?.matchdays ?? []).some((group) =>
-        (group.matches ?? []).some((match) => isMatchLive(match)),
+      const data = query.state.data;
+      const hasLive = (data?.rounds ?? []).some((round) =>
+        (round.matches ?? []).some((match) => isMatchLive(match)),
       );
       return hasLive ? 15 * 1000 : 60 * 1000;
     },
@@ -110,56 +109,26 @@ export default function CompetitionDetailScreen() {
   });
 
   const fallbackTitle = params.title || 'Competição';
-  const compTitle = competitionDetail?.competition.name ?? fallbackTitle;
-  const compLogo = competitionDetail?.competition.logo;
-  const isCupFormat = competitionDetail?.competition.format === 'cup';
+  const compTitle = detail?.competition.name ?? fallbackTitle;
+  const compLogo = detail?.competition.logo;
+  const isCupFormat = detail?.competition.format === 'cup';
 
-  const matchdayOptions = useMemo((): MatchdayOption[] => {
-    // For cups: build options from the rounds API (shows ALL rounds, even those without matches)
-    if (isCupFormat && competitionDetail?.cupRounds && competitionDetail.cupRounds.length > 0) {
-      const options = competitionDetail.cupRounds.map((round) => ({
-        value: round.id,
-        label: round.name,
-      }));
+  const rounds = useMemo(() => detail?.rounds ?? [], [detail]);
 
-      console.log(
-        `[Competition Detail] Cup rounds for ${competitionId}: ${options.map((o) => o.value).join(', ')}`,
-      );
+  const roundOptions = useMemo((): RoundOption[] => {
+    return rounds.map((round) => ({
+      value: round.id,
+      label: round.label,
+    }));
+  }, [rounds]);
 
-      return options;
-    }
+  // Jornada/eliminatória atual: ronda com jogos ao vivo → ronda cujo intervalo
+  // de datas contém agora → ronda com jogos hoje → primeira (pré-época) / última (pós-época)
+  const currentRoundId = useMemo(() => {
+    if (rounds.length === 0) return 0;
 
-    // For leagues: build options from returned matchdays
-    const available = (competitionDetail?.matchdays ?? [])
-      .map((item) => Number(item.matchday ?? 0))
-      .filter((item, index, array) => item > 0 && array.indexOf(item) === index)
-      .sort((a, b) => a - b)
-      .map((item) => {
-        const label = competitionDetail?.matchdays.find((group) => Number(group.matchday ?? 0) === item)?.label;
-        return { value: item, label: label ?? `Jornada ${item}` };
-      });
-
-    console.log(
-      `[Competition Detail] Available matchdays for ${competitionId}: ${available.map((item) => item.value).join(', ')}`,
-    );
-
-    return available;
-  }, [competitionDetail, competitionId, isCupFormat]);
-
-  const currentMatchday = useMemo(() => {
-    const allMatchdays = competitionDetail?.matchdays ?? [];
-    if (allMatchdays.length === 0) {
-      // For cups with no matches loaded, default to the last round
-      if (isCupFormat && matchdayOptions.length > 0) {
-        return matchdayOptions[matchdayOptions.length - 1].value;
-      }
-      return 0;
-    }
-
-    const liveGroup = allMatchdays.find((group) => (group.matches ?? []).some((match) => isMatchLive(match)));
-    if (liveGroup && Number(liveGroup.matchday ?? 0) > 0) {
-      return Number(liveGroup.matchday ?? 0);
-    }
+    const liveRound = rounds.find((round) => (round.matches ?? []).some((match) => isMatchLive(match)));
+    if (liveRound) return liveRound.id;
 
     const now = Date.now();
     const dayStart = new Date();
@@ -167,125 +136,97 @@ export default function CompetitionDetailScreen() {
     const dayStartMs = dayStart.getTime();
     const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
 
-    const datedGroups = allMatchdays
-      .map((group) => {
-        const timestamps = (group.matches ?? [])
+    const datedRounds = rounds
+      .map((round) => {
+        const timestamps = (round.matches ?? [])
           .map((match) => getMatchTimestamp(match.date))
           .filter((value) => value > 0);
 
-        if (timestamps.length === 0) {
-          return null;
-        }
+        if (timestamps.length === 0) return null;
 
         return {
-          matchday: Number(group.matchday ?? 0),
+          id: round.id,
           minTime: Math.min(...timestamps),
           maxTime: Math.max(...timestamps),
         };
       })
-      .filter((group): group is { matchday: number; minTime: number; maxTime: number } =>
-        !!group && group.matchday > 0,
-      )
-      .sort((a, b) => a.matchday - b.matchday);
+      .filter((round): round is { id: number; minTime: number; maxTime: number } => !!round)
+      .sort((a, b) => a.id - b.id);
 
-    if (datedGroups.length === 0) {
-      return matchdayOptions[matchdayOptions.length - 1]?.value ?? 0;
+    if (datedRounds.length === 0) {
+      return roundOptions[roundOptions.length - 1]?.value ?? 0;
     }
 
-    // 1. Matchday whose date span contains right now (games kicked off, still in its window)
-    const containing = datedGroups.find((group) => group.minTime <= now && now <= group.maxTime);
-    if (containing) {
-      return containing.matchday;
-    }
+    const containing = datedRounds.find((round) => round.minTime <= now && now <= round.maxTime);
+    if (containing) return containing.id;
 
-    // 2. Matchday with games today = current matchday, even if all games already finished today
-    const todayGroup = datedGroups.find((group) => group.maxTime >= dayStartMs && group.minTime < dayEndMs);
-    if (todayGroup) {
-      return todayGroup.matchday;
-    }
+    const todayRound = datedRounds.find((round) => round.maxTime >= dayStartMs && round.minTime < dayEndMs);
+    if (todayRound) return todayRound.id;
 
-    // 3. Season hasn't started → first matchday; season is over → last matchday
-    if (now < datedGroups[0].minTime) {
-      return datedGroups[0].matchday;
-    }
-
-    return datedGroups[datedGroups.length - 1].matchday;
-  }, [competitionDetail, matchdayOptions, isCupFormat]);
+    if (now < datedRounds[0].minTime) return datedRounds[0].id;
+    return datedRounds[datedRounds.length - 1].id;
+  }, [rounds, roundOptions]);
 
   useEffect(() => {
-    if (hasInitializedMatchday) {
+    if (hasInitializedRound) {
       return;
     }
 
-    const fallbackMatchday = currentMatchday > 0 ? currentMatchday : matchdayOptions[0]?.value ?? 0;
-    if (fallbackMatchday > 0) {
-      console.log(`[Competition Detail] Defaulting to current matchday ${fallbackMatchday} for ${competitionId}`);
-      setSelectedMatchday(fallbackMatchday);
+    const fallbackRound = currentRoundId > 0 ? currentRoundId : roundOptions[0]?.value ?? 0;
+    if (fallbackRound > 0) {
+      setSelectedRoundId(fallbackRound);
     }
-  }, [competitionId, currentMatchday, hasInitializedMatchday, matchdayOptions]);
+  }, [competitionId, currentRoundId, hasInitializedRound, roundOptions]);
 
-  const resolvedMatchday = selectedMatchday ?? currentMatchday;
-  const selectedMatchdayLabel = useMemo(() => {
-    return matchdayOptions.find((option) => option.value === resolvedMatchday)?.label ?? 'Escolher jornada';
-  }, [matchdayOptions, resolvedMatchday]);
+  const resolvedRoundId = selectedRoundId ?? currentRoundId;
 
-  const filteredMatchdays = useMemo(() => {
-    const allMatchdays = competitionDetail?.matchdays ?? [];
+  const selectedRound = useMemo(() => {
+    return rounds.find((round) => round.id === resolvedRoundId) ?? null;
+  }, [rounds, resolvedRoundId]);
 
-    if (resolvedMatchday > 0) {
-      return allMatchdays.filter((item) => Number(item.matchday ?? 0) === resolvedMatchday);
-    }
+  const selectedRoundLabel = useMemo(() => {
+    return (
+      roundOptions.find((option) => option.value === resolvedRoundId)?.label ??
+      (isCupFormat ? 'Escolher eliminatória' : 'Escolher jornada')
+    );
+  }, [roundOptions, resolvedRoundId, isCupFormat]);
 
-    return allMatchdays;
-  }, [competitionDetail, resolvedMatchday]);
+  const standings = useMemo((): StandingRow[] => detail?.standings ?? [], [detail]);
 
-  const compMatches = useMemo(() => filteredMatchdays.flatMap((m) => m.matches ?? []), [filteredMatchdays]);
-  const standings = useMemo(() => mapStandingsPayload(competitionDetail?.standings ?? []), [competitionDetail]);
+  // Jogos da ronda selecionada, agrupados por dia
+  const dateGroups = useMemo((): DateMatchGroup[] => {
+    const matches = [...(selectedRound?.matches ?? [])].sort(
+      (a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date),
+    );
 
-  const matchesByRound = useMemo(() => {
-    return filteredMatchdays
-      .map((group) => {
-        const matches = [...(group.matches ?? [])].sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date));
-        const dateGroups = new Map<string, DateMatchGroup>();
+    const groups = new Map<string, DateMatchGroup>();
 
-        matches.forEach((match) => {
-          const parsed = parseMatchDate(match.date);
-          const key = parsed
-            ? `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
-            : 'unknown';
-          const label = parsed ? formatGroupDateLabel(parsed) : 'Data por definir';
-          const existing = dateGroups.get(key);
+    matches.forEach((match) => {
+      const parsed = parseMatchDate(match.date);
+      const key = parsed
+        ? `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
+        : 'unknown';
+      const label = parsed ? formatGroupDateLabel(parsed) : 'Data por definir';
+      const existing = groups.get(key);
 
-          if (existing) {
-            existing.matches.push(match);
-            return;
-          }
+      if (existing) {
+        existing.matches.push(match);
+        return;
+      }
 
-          dateGroups.set(key, {
-            key,
-            label,
-            matches: [match],
-          });
-        });
+      groups.set(key, { key, label, matches: [match] });
+    });
 
-        return {
-          matchday: Number(group.matchday ?? 0),
-          roundLabel: group.label ?? (Number(group.matchday ?? 0) > 0 ? (isCupFormat ? `Eliminatória ${group.matchday}` : `Jornada ${group.matchday}`) : isCupFormat ? 'Taça' : 'Sem Jornada'),
-          dateGroups: Array.from(dateGroups.values()).sort((a, b) => {
-            const aTime = getMatchTimestamp(a.matches[0]?.date);
-            const bTime = getMatchTimestamp(b.matches[0]?.date);
-            return aTime - bTime;
-          }),
-        };
-      })
-      .sort((a, b) => a.matchday - b.matchday);
-  }, [filteredMatchdays, isCupFormat]);
+    return Array.from(groups.values());
+  }, [selectedRound]);
+
+  const roundMatches = selectedRound?.matches ?? [];
 
   const goBack = useCallback(() => router.back(), []);
 
-  const handleSelectMatchday = useCallback((value: number) => {
-    setSelectedMatchday(value);
-    setShowMatchdayDropdown(false);
+  const handleSelectRound = useCallback((value: number) => {
+    setSelectedRoundId(value);
+    setShowRoundDropdown(false);
   }, []);
 
   const handleMatchPress = useCallback(
@@ -306,22 +247,22 @@ export default function CompetitionDetailScreen() {
     [compLogo, compTitle, competitionId, isCupFormat],
   );
 
-  const renderCupRoundChips = () => (
+  const renderRoundChips = () => (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.cupRoundsList}
+      contentContainerStyle={styles.roundsList}
     >
-      {matchdayOptions.map((option) => {
-        const selected = option.value === resolvedMatchday;
+      {roundOptions.map((option) => {
+        const selected = option.value === resolvedRoundId;
         return (
           <Pressable
             key={option.value}
-            style={[styles.cupRoundChip, selected && styles.cupRoundChipActive]}
-            onPress={() => handleSelectMatchday(option.value)}
-            testID={`cup-round-option-${option.value}`}
+            style={[styles.roundChip, selected && styles.roundChipActive]}
+            onPress={() => handleSelectRound(option.value)}
+            testID={`round-option-${option.value}`}
           >
-            <Text style={[styles.cupRoundChipText, selected && styles.cupRoundChipTextActive]}>
+            <Text style={[styles.roundChipText, selected && styles.roundChipTextActive]}>
               {option.label}
             </Text>
           </Pressable>
@@ -330,13 +271,13 @@ export default function CompetitionDetailScreen() {
     </ScrollView>
   );
 
-  const renderLeagueDropdown = () => (
+  const renderRoundDropdown = () => (
     <Pressable
-      style={styles.matchdayDropdownTrigger}
-      onPress={() => setShowMatchdayDropdown(true)}
-      testID="matchday-dropdown-trigger"
+      style={styles.dropdownTrigger}
+      onPress={() => setShowRoundDropdown(true)}
+      testID="round-dropdown-trigger"
     >
-      <Text style={styles.matchdayDropdownText}>{selectedMatchdayLabel}</Text>
+      <Text style={styles.dropdownTriggerText}>{selectedRoundLabel}</Text>
       <ChevronDown size={18} color={Colors.primary} />
     </Pressable>
   );
@@ -405,6 +346,127 @@ export default function CompetitionDetailScreen() {
     );
   };
 
+  const renderMatches = () => {
+    if (rounds.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>⚽</Text>
+          <Text style={styles.emptyTitle}>Sem jogos</Text>
+          <Text style={styles.emptySubtitle}>Nenhum jogo registado nesta competição</Text>
+        </View>
+      );
+    }
+
+    if (roundOptions.length > 0) {
+      return (
+        <View style={styles.roundPickerSection}>
+          <Text style={styles.roundPickerLabel}>
+            {isCupFormat ? 'Escolhe a eliminatória' : 'Jornada'}
+          </Text>
+          {isCupFormat ? renderRoundChips() : renderRoundDropdown()}
+        </View>
+      );
+    }
+
+    return null;
+  };
+
+  const renderRoundMatches = () => {
+    if (roundMatches.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>⚽</Text>
+          <Text style={styles.emptyTitle}>
+            {isCupFormat ? 'Sem jogos nesta eliminatória' : 'Sem jogos nesta jornada'}
+          </Text>
+          <Text style={styles.emptySubtitle}>
+            {isCupFormat
+              ? 'Esta eliminatória ainda não tem jogos disponíveis'
+              : 'Esta jornada ainda não tem jogos disponíveis'}
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.roundCard}>
+        <View style={styles.roundHeader}>
+          <Text style={styles.roundTitle}>{selectedRoundLabel}</Text>
+        </View>
+
+        {dateGroups.map((dateGroup) => (
+          <View key={dateGroup.key}>
+            <View style={styles.dateGroupHeader}>
+              <Text style={styles.dateGroupTitle}>{dateGroup.label}</Text>
+            </View>
+
+            {dateGroup.matches.map((match, mIdx) =>
+              renderMatchCard(match, selectedRoundLabel, mIdx, dateGroup.matches.length),
+            )}
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const renderStandings = () => {
+    if (standings.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📊</Text>
+          <Text style={styles.emptyTitle}>Sem classificação</Text>
+          <Text style={styles.emptySubtitle}>Ainda não existem dados de classificação</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.standingsCard}>
+        <View style={styles.standingsHeaderRow}>
+          <Text style={[styles.stHeaderText, { width: 28, textAlign: 'center' as const }]}>#</Text>
+          <Text style={[styles.stHeaderText, { flex: 1 }]}>Equipa</Text>
+          <Text style={[styles.stHeaderText, styles.stCol]}>JGS</Text>
+          <Text style={[styles.stHeaderText, styles.stCol]}>V</Text>
+          <Text style={[styles.stHeaderText, styles.stCol]}>E</Text>
+          <Text style={[styles.stHeaderText, styles.stCol]}>D</Text>
+          <Text style={[styles.stHeaderText, styles.stCol]}>GM</Text>
+          <Text style={[styles.stHeaderText, styles.stCol]}>GS</Text>
+          <Text style={[styles.stHeaderText, styles.stCol]}>DG</Text>
+          <Text style={[styles.stHeaderText, styles.stColPts]}>PTS</Text>
+        </View>
+        {standings.map((row, idx) => (
+          <View key={row.teamId} style={[styles.stRow, idx % 2 === 0 && styles.stRowAlt]}>
+            <Text style={[styles.stPos, idx < 3 && styles.stPosTop]}>{idx + 1}</Text>
+            <View style={styles.stTeam}>
+              <TeamLogo uri={row.teamLogo} fallback={row.teamName} size={18} />
+              <Text style={styles.stTeamName} numberOfLines={1}>
+                {row.teamName}
+              </Text>
+            </View>
+            <Text style={[styles.stStat, styles.stCol]}>{row.played}</Text>
+            <Text style={[styles.stStat, styles.stCol]}>{row.won}</Text>
+            <Text style={[styles.stStat, styles.stCol]}>{row.drawn}</Text>
+            <Text style={[styles.stStat, styles.stCol]}>{row.lost}</Text>
+            <Text style={[styles.stStat, styles.stCol]}>{row.goalsFor}</Text>
+            <Text style={[styles.stStat, styles.stCol]}>{row.goalsAgainst}</Text>
+            <Text
+              style={[
+                styles.stStat,
+                styles.stCol,
+                row.goalDifference > 0 && styles.stPositive,
+                row.goalDifference < 0 && styles.stNegative,
+              ]}
+            >
+              {row.goalDifference > 0 ? '+' : ''}
+              {row.goalDifference}
+            </Text>
+            <Text style={[styles.stPts, styles.stColPts]}>{row.points}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
@@ -437,7 +499,7 @@ export default function CompetitionDetailScreen() {
         </View>
       ) : null}
 
-      {matchesLoading ? (
+      {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>A carregar...</Text>
@@ -456,163 +518,38 @@ export default function CompetitionDetailScreen() {
               />
             }
           >
-            {isCupFormat ? (
+            {isCupFormat || activeTab === 'matches' ? (
               <>
-                {matchdayOptions.length > 0 && (
-                  <View style={styles.matchdayPickerSection}>
-                    <Text style={styles.matchdayPickerLabel}>Escolhe a eliminatória</Text>
-                    {renderCupRoundChips()}
-                  </View>
-                )}
-
-                {!compMatches || compMatches.length === 0 ? (
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyIcon}>⚽</Text>
-                    <Text style={styles.emptyTitle}>Sem jogos nesta eliminatória</Text>
-                    <Text style={styles.emptySubtitle}>
-                      Esta eliminatória ainda não tem jogos disponíveis
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.roundsContainer}>
-                    {matchesByRound.map((group) => (
-                      <View key={group.roundLabel} style={styles.roundCard}>
-                        <View style={styles.roundHeader}>
-                          <Text style={styles.roundTitle}>{group.roundLabel}</Text>
-                        </View>
-
-                        {group.dateGroups.map((dateGroup) => (
-                          <View key={`${group.roundLabel}-${dateGroup.key}`}>
-                            <View style={styles.dateGroupHeader}>
-                              <Text style={styles.dateGroupTitle}>{dateGroup.label}</Text>
-                            </View>
-
-                            {dateGroup.matches.map((match, mIdx) =>
-                              renderMatchCard(match, group.roundLabel, mIdx, dateGroup.matches.length),
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                    ))}
-                  </View>
-                )}
+                {renderMatches()}
+                {renderRoundMatches()}
               </>
-            ) : activeTab === 'matches' ? (
-              <>
-                {matchdayOptions.length > 0 && (
-                  <View style={styles.matchdayPickerSection}>
-                    <Text style={styles.matchdayPickerLabel}>Jornada</Text>
-                    {renderLeagueDropdown()}
-                  </View>
-                )}
-
-                {!compMatches || compMatches.length === 0 ? (
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyIcon}>⚽</Text>
-                    <Text style={styles.emptyTitle}>Sem jogos</Text>
-                    <Text style={styles.emptySubtitle}>
-                      Nenhum jogo registado nesta competição
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.roundsContainer}>
-                    {matchesByRound.map((group) => (
-                      <View key={group.roundLabel} style={styles.roundCard}>
-                        <View style={styles.roundHeader}>
-                          <Text style={styles.roundTitle}>{group.roundLabel}</Text>
-                        </View>
-
-                        {group.dateGroups.map((dateGroup) => (
-                          <View key={`${group.roundLabel}-${dateGroup.key}`}>
-                            <View style={styles.dateGroupHeader}>
-                              <Text style={styles.dateGroupTitle}>{dateGroup.label}</Text>
-                            </View>
-
-                            {dateGroup.matches.map((match, mIdx) =>
-                              renderMatchCard(match, group.roundLabel, mIdx, dateGroup.matches.length),
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </>
-            ) : standings.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>📊</Text>
-                <Text style={styles.emptyTitle}>Sem classificação</Text>
-                <Text style={styles.emptySubtitle}>Ainda não existem dados de classificação</Text>
-              </View>
             ) : (
-              <View style={styles.standingsCard}>
-                <View style={styles.standingsHeaderRow}>
-                  <Text style={[styles.stHeaderText, { width: 28, textAlign: 'center' as const }]}>#</Text>
-                  <Text style={[styles.stHeaderText, { flex: 1 }]}>Equipa</Text>
-                  <Text style={[styles.stHeaderText, styles.stCol]}>J</Text>
-                  <Text style={[styles.stHeaderText, styles.stCol]}>V</Text>
-                  <Text style={[styles.stHeaderText, styles.stCol]}>E</Text>
-                  <Text style={[styles.stHeaderText, styles.stCol]}>D</Text>
-                  <Text style={[styles.stHeaderText, styles.stCol]}>GM</Text>
-                  <Text style={[styles.stHeaderText, styles.stCol]}>GS</Text>
-                  <Text style={[styles.stHeaderText, styles.stCol]}>DG</Text>
-                  <Text style={[styles.stHeaderText, styles.stColPts]}>Pts</Text>
-                </View>
-                {standings.map((row, idx) => (
-                  <View key={row.teamId} style={[styles.stRow, idx % 2 === 0 && styles.stRowAlt]}>
-                    <Text style={[styles.stPos, idx < 3 && styles.stPosTop]}>{idx + 1}</Text>
-                    <View style={styles.stTeam}>
-                      <TeamLogo uri={row.teamLogo} fallback={row.teamName} size={18} />
-                      <Text style={styles.stTeamName} numberOfLines={1}>
-                        {row.teamName}
-                      </Text>
-                    </View>
-                    <Text style={[styles.stStat, styles.stCol]}>{row.played}</Text>
-                    <Text style={[styles.stStat, styles.stCol]}>{row.won}</Text>
-                    <Text style={[styles.stStat, styles.stCol]}>{row.drawn}</Text>
-                    <Text style={[styles.stStat, styles.stCol]}>{row.lost}</Text>
-                    <Text style={[styles.stStat, styles.stCol]}>{row.goalsFor}</Text>
-                    <Text style={[styles.stStat, styles.stCol]}>{row.goalsAgainst}</Text>
-                    <Text
-                      style={[
-                        styles.stStat,
-                        styles.stCol,
-                        row.goalDifference > 0 && styles.stPositive,
-                        row.goalDifference < 0 && styles.stNegative,
-                      ]}
-                    >
-                      {row.goalDifference > 0 ? '+' : ''}
-                      {row.goalDifference}
-                    </Text>
-                    <Text style={[styles.stPts, styles.stColPts]}>{row.points}</Text>
-                  </View>
-                ))}
-              </View>
+              renderStandings()
             )}
 
             <View style={{ height: 40 }} />
           </ScrollView>
 
           <Modal
-            visible={!isCupFormat && showMatchdayDropdown}
+            visible={!isCupFormat && showRoundDropdown}
             transparent
             animationType="fade"
-            onRequestClose={() => setShowMatchdayDropdown(false)}
+            onRequestClose={() => setShowRoundDropdown(false)}
           >
             <View style={styles.dropdownOverlay}>
-              <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setShowMatchdayDropdown(false)} />
+              <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setShowRoundDropdown(false)} />
               <View style={[styles.dropdownSheet, { paddingBottom: insets.bottom + 16 }]}>
                 <View style={styles.dropdownHandle} />
-                <Text style={styles.dropdownTitle}>{isCupFormat ? 'Escolher eliminatória' : 'Escolher jornada'}</Text>
+                <Text style={styles.dropdownTitle}>Escolher jornada</Text>
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.dropdownOptions}>
-                  {matchdayOptions.map((option) => {
-                    const selected = option.value === resolvedMatchday;
+                  {roundOptions.map((option) => {
+                    const selected = option.value === resolvedRoundId;
                     return (
                       <Pressable
                         key={option.value}
                         style={[styles.dropdownOption, selected && styles.dropdownOptionActive]}
-                        onPress={() => handleSelectMatchday(option.value)}
-                        testID={`matchday-option-${option.value}`}
+                        onPress={() => handleSelectRound(option.value)}
+                        testID={`round-option-${option.value}`}
                       >
                         <Text style={[styles.dropdownOptionText, selected && styles.dropdownOptionTextActive]}>
                           {option.label}
@@ -692,20 +629,20 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: Colors.primary,
   },
-  matchdayPickerSection: {
+  roundPickerSection: {
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 8,
     gap: 8,
   },
-  matchdayPickerLabel: {
+  roundPickerLabel: {
     fontSize: 12,
     fontWeight: '700' as const,
     color: Colors.textMuted,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.6,
   },
-  matchdayDropdownTrigger: {
+  dropdownTrigger: {
     minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
@@ -716,16 +653,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  matchdayDropdownText: {
+  dropdownTriggerText: {
     fontSize: 15,
     fontWeight: '700' as const,
     color: Colors.text,
   },
-  cupRoundsList: {
+  roundsList: {
     gap: 8,
     paddingRight: 12,
   },
-  cupRoundChip: {
+  roundChip: {
     minHeight: 44,
     borderRadius: 22,
     paddingHorizontal: 16,
@@ -735,16 +672,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  cupRoundChipActive: {
+  roundChipActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
-  cupRoundChipText: {
+  roundChipText: {
     fontSize: 14,
     fontWeight: '800' as const,
     color: Colors.textSecondary,
   },
-  cupRoundChipTextActive: {
+  roundChipTextActive: {
     color: '#FFFFFF',
   },
   loadingContainer: {
@@ -761,13 +698,10 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 30,
   },
-  roundsContainer: {
-    gap: 12,
-    marginHorizontal: 12,
-  },
   roundCard: {
     backgroundColor: Colors.surface,
     borderRadius: 12,
+    marginHorizontal: 12,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },

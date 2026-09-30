@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 
 import {
   APIMatch,
-  APICompetitionDetail,
+  CompetitionDetail,
   COMPETITION_CATEGORIES,
   FEATURED_COMPETITIONS,
   StandingRow,
@@ -209,70 +209,6 @@ export function detectKnockoutFormat(matches: APIMatch[]): boolean {
   }
 
   return knockoutCount > leagueCount && knockoutCount > 0;
-}
-
-interface ApiStandingPayload {
-  team?: string;
-  team_name?: string;
-  team_logo?: string;
-  points?: number;
-  played?: number;
-  won?: number;
-  wins?: number;
-  draw?: number;
-  drawn?: number;
-  draws?: number;
-  lost?: number;
-  losses?: number;
-  gf?: number;
-  goals_for?: number;
-  ga?: number;
-  goals_against?: number;
-  gd?: number;
-  goal_difference?: number;
-  goal_diff?: number;
-  team_id?: string | number;
-}
-
-export function mapStandingsPayload(raw: unknown): StandingRow[] {
-  if (!Array.isArray(raw)) return [];
-
-  const rows = raw.map((item, index) => {
-    const row = item as ApiStandingPayload;
-    const played = Number(row.played ?? 0);
-    const won = Number(row.won ?? row.wins ?? 0);
-    const drawn = Number(row.drawn ?? row.draws ?? row.draw ?? 0);
-    const lost = Number(row.lost ?? row.losses ?? 0);
-    const goalsFor = Number(row.goals_for ?? row.gf ?? 0);
-    const goalsAgainst = Number(row.goals_against ?? row.ga ?? 0);
-    const goalDifference = Number(
-      row.goal_difference ?? row.goal_diff ?? row.gd ?? goalsFor - goalsAgainst,
-    );
-    const points = Number(row.points ?? 0);
-    const teamName = decodeHtmlEntities(String(row.team_name ?? row.team ?? `Equipa ${index + 1}`));
-    const teamId = String(row.team_id ?? teamName);
-
-    return {
-      teamId,
-      teamName,
-      teamLogo: String(row.team_logo ?? ''),
-      played,
-      won,
-      drawn,
-      lost,
-      goalsFor,
-      goalsAgainst,
-      goalDifference,
-      points,
-    };
-  });
-
-  return rows.sort(
-    (a, b) =>
-      b.points - a.points ||
-      b.goalDifference - a.goalDifference ||
-      b.goalsFor - a.goalsFor,
-  );
 }
 
 function getFeaturedCompetitionMeta(competition: CompetitionInfo): {
@@ -496,7 +432,7 @@ export async function fetchAllMatchesMerged(): Promise<APIMatch[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Competição individual
+// Competição individual (estrutura nativa do plugin)
 // ---------------------------------------------------------------------------
 
 export async function fetchCompetitionStandings(competitionId: number): Promise<StandingRow[]> {
@@ -507,56 +443,42 @@ export async function fetchCompetitionStandings(competitionId: number): Promise<
   return parseFpfPage(html).standings;
 }
 
+/**
+ * Devolve o detalhe da competição na estrutura nativa do plugin:
+ * rondas (jornadas com número / eliminatórias com título) + classificação.
+ */
 export async function fetchCompetitionDetail(
   competitionId: number,
-): Promise<APICompetitionDetail> {
+): Promise<CompetitionDetail> {
   const meta = getFpfMetaForId(competitionId);
 
   if (!meta) {
     return {
       competition: { id: competitionId, name: 'Competição', format: 'league' },
-      matchdays: [],
+      rounds: [],
       standings: [],
     };
   }
 
   const html = await fetchFpfPage(meta.slug);
   const page = parseFpfPage(html);
-  const matches = buildFpfMatches(page.rounds, competitionId);
 
+  // Taças: nome com "taça"/"cup" ou rondas todas sem número (só títulos de eliminatória)
   const isCupFormat =
     isCupCompetitionName(meta.name) ||
     (page.rounds.length > 0 && page.rounds.every((round) => round.number === null));
 
-  const matchdays = page.rounds.map((round, index) => {
-    const matchday = round.number ?? index + 1;
+  const allMatches = buildFpfMatches(page.rounds, competitionId);
+
+  const rounds = page.rounds.map((round, index) => {
+    const id = round.number ?? index + 1;
     return {
-      matchday,
+      id,
       label: round.label,
-      matches: matches.filter((match) => match.matchday === matchday),
+      number: round.number,
+      matches: allMatches.filter((match) => match.matchday === id),
     };
   });
-
-  const cupRounds = isCupFormat
-    ? page.rounds.map((round, index) => ({
-        id: round.number ?? index + 1,
-        name: round.label,
-      }))
-    : undefined;
-
-  const standings = page.standings.map((row) => ({
-    team_id: row.teamId,
-    team_name: row.teamName,
-    team_logo: row.teamLogo,
-    played: row.played,
-    won: row.won,
-    drawn: row.drawn,
-    lost: row.lost,
-    goals_for: row.goalsFor,
-    goals_against: row.goalsAgainst,
-    goal_difference: row.goalDifference,
-    points: row.points,
-  }));
 
   return {
     competition: {
@@ -565,8 +487,7 @@ export async function fetchCompetitionDetail(
       logo: meta.logo,
       format: isCupFormat ? 'cup' : 'league',
     },
-    matchdays,
-    cupRounds,
-    standings,
+    rounds,
+    standings: page.standings,
   };
 }
