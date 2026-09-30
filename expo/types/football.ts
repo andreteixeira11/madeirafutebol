@@ -48,6 +48,8 @@ export interface APIMatch {
   permalink?: string;
   /** Nome da jornada/eliminatória tal como aparece no plugin do site (ex.: "Jornada 5", "1.ª Eliminatória"). */
   round_label?: string;
+  /** Estádio do jogo, tal como aparece no plugin do site. */
+  stadium?: string | null;
 }
 
 export type APIMatchesResponse = APIMatch[];

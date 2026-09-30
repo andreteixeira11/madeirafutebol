@@ -222,17 +222,18 @@ export default function CompetitionsScreen() {
         ) : (
           sections.map((section) => (
             <View key={section.key} style={styles.section}>
-              {section.key !== 'seniores' ? (
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{section.title}</Text>
-                </View>
-              ) : null}
-              {section.items.map((comp) => (
-                <CompetitionRow
-                  key={comp.id}
-                  competition={comp}
-                />
-              ))}
+              <View style={styles.sectionHeaderBar}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <Text style={styles.sectionCount}>{section.items.length}</Text>
+              </View>
+              <View style={styles.sectionCard}>
+                {section.items.map((comp, idx) => (
+                  <View key={comp.id}>
+                    <CompetitionRow competition={comp} />
+                    {idx < section.items.length - 1 && <View style={styles.compDivider} />}
+                  </View>
+                ))}
+              </View>
             </View>
           ))
         )}
@@ -349,33 +350,60 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 14,
   },
-  sectionHeader: {
+  sectionHeaderBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: Colors.surfaceLight,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: Colors.border,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '800' as const,
     color: Colors.text,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
   },
-  compCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  sectionCount: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: Colors.textMuted,
     backgroundColor: Colors.surface,
-    marginHorizontal: 12,
-    marginBottom: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  sectionCard: {
+    backgroundColor: Colors.surface,
     borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
-    gap: 14,
+  },
+  compDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginLeft: 68,
+  },
+  compCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    gap: 12,
   },
   compIconFallback: {
     backgroundColor: Colors.primaryLight,

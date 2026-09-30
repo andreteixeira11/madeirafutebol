@@ -21,8 +21,6 @@ import { APP_LOGO_URL } from '@/constants/branding';
 import { APIMatch } from '@/types/football';
 import {
   extractScore,
-  isMatchFinished,
-  isMatchLive,
   fetchAllMatchesMerged,
   fetchCompetitionsLogos,
   parseMatchDate,
@@ -51,15 +49,12 @@ function formatDisplayDate(date: Date): string {
   return date.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-function TeamLogo({ uri, fallback, size = 24 }: { uri?: string; fallback: string; size?: number }) {
-  if (uri) {
-    return <Image source={{ uri }} style={[styles.teamLogo, { width: size, height: size }]} resizeMode="contain" />;
-  }
-  return (
-    <View style={[styles.teamDot, { width: size, height: size, borderRadius: size / 2 }]}> 
-      <Text style={[styles.teamDotText, { fontSize: size * 0.45 }]}>{fallback.charAt(0)}</Text>
-    </View>
-  );
+function formatShortDate(date: Date): string {
+  return date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' });
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 }
 
 function CompetitionLogo({ uri }: { uri?: string }) {
@@ -73,6 +68,7 @@ function CompetitionLogo({ uri }: { uri?: string }) {
   );
 }
 
+/** Linha de jogo ao estilo do plugin: equipa casa | resultado/data | equipa fora + estádio. */
 const MatchRow = React.memo(function MatchRow({
   match,
   compName,
@@ -86,8 +82,6 @@ const MatchRow = React.memo(function MatchRow({
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const score = useMemo(() => extractScore(match), [match]);
-  const finished = useMemo(() => isMatchFinished(match), [match]);
-  const isLive = isMatchLive(match);
 
   const homeWin = score ? score.home > score.away : match.winner_team_id === match.team1_id;
   const awayWin = score ? score.away > score.home : match.winner_team_id === match.team2_id;
@@ -116,51 +110,43 @@ const MatchRow = React.memo(function MatchRow({
     });
   }, [match, compName, competitionId, compLogo]);
 
-  const matchTime = useMemo(() => {
+  const centerContent = useMemo(() => {
+    if (score) {
+      return (
+        <Text style={styles.scoreText}>
+          <Text style={homeWin ? styles.scoreWinner : null}>{score.home}</Text>
+          {' - '}
+          <Text style={awayWin ? styles.scoreWinner : null}>{score.away}</Text>
+        </Text>
+      );
+    }
+
     const parsed = parseMatchDate(match.date);
-    if (!parsed) return '';
-    return parsed.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-  }, [match.date]);
+    if (!parsed) {
+      return <Text style={styles.centerMuted}>a definir</Text>;
+    }
+
+    return (
+      <>
+        <Text style={styles.centerDate}>{formatShortDate(parsed)}</Text>
+        <Text style={styles.centerTime}>{formatTime(parsed)}</Text>
+      </>
+    );
+  }, [score, match.date, homeWin, awayWin]);
 
   return (
     <Pressable onPress={handlePress} onPressIn={onPressIn} onPressOut={onPressOut} testID={`match-${match.id}`}>
-      <Animated.View style={[styles.matchRow, { transform: [{ scale: scaleAnim }] }]}> 
-        <View style={styles.matchTeams}>
-          <View style={styles.teamRow}>
-            <TeamLogo uri={match.team1_logo} fallback={match.team1} />
-            <Text style={[styles.teamName, homeWin && finished && styles.winnerName]} numberOfLines={1}>
-              {match.team1}
-            </Text>
-          </View>
-          <View style={styles.teamRow}>
-            <TeamLogo uri={match.team2_logo} fallback={match.team2} />
-            <Text style={[styles.teamName, awayWin && finished && styles.winnerName]} numberOfLines={1}>
-              {match.team2}
-            </Text>
-          </View>
+      <Animated.View style={[styles.matchBlock, { transform: [{ scale: scaleAnim }] }]}>
+        <View style={styles.matchRow}>
+          <Text style={[styles.teamName, styles.teamNameHome, homeWin && styles.winnerName]} numberOfLines={1}>
+            {match.team1}
+          </Text>
+          <View style={styles.matchCenter}>{centerContent}</View>
+          <Text style={[styles.teamName, styles.teamNameAway, awayWin && styles.winnerName]} numberOfLines={1}>
+            {match.team2}
+          </Text>
         </View>
-
-        <View style={styles.matchScoreSection}>
-          {isLive ? (
-            <View style={styles.liveBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveText}>{match.playtime || 'AO VIVO'}</Text>
-            </View>
-          ) : score ? (
-            <View style={styles.finishedScores}>
-              <Text style={[styles.scoreText, homeWin && styles.winnerScore]}>{score.home}</Text>
-              <Text style={[styles.scoreText, awayWin && styles.winnerScore]}>{score.away}</Text>
-            </View>
-          ) : finished ? (
-            <View style={styles.resultBadge}>
-              <Text style={styles.resultBadgeText}>FT</Text>
-            </View>
-          ) : (
-            <View style={styles.scheduledBadge}>
-              <Text style={styles.scheduledText}>{matchTime || 'vs'}</Text>
-            </View>
-          )}
-        </View>
+        {match.stadium ? <Text style={styles.stadiumText}>{match.stadium}</Text> : null}
       </Animated.View>
     </Pressable>
   );
@@ -168,11 +154,16 @@ const MatchRow = React.memo(function MatchRow({
 
 type DateFilter = 'today' | 'tomorrow' | 'custom';
 
+interface RoundGroup {
+  label: string;
+  matches: APIMatch[];
+}
+
 interface MatchesGroup {
   competitionId: number;
   competitionName: string;
   competitionLogo?: string;
-  matches: APIMatch[];
+  rounds: RoundGroup[];
 }
 
 function DatePickerModal({
@@ -229,7 +220,7 @@ function DatePickerModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}> 
+        <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
           <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Escolher Data</Text>
@@ -341,15 +332,11 @@ export default function ResultsScreen() {
     return null;
   }, [dateFilter, today, tomorrow, customDate]);
 
-  const { data: allMatches, isLoading, refetch, isRefetching } = useQuery({
+  const { data: allMatches, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ['api-matches-merged'],
     queryFn: fetchAllMatchesMerged,
     staleTime: 30 * 1000,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      const hasLive = Array.isArray(data) && data.some((match) => isMatchLive(match));
-      return hasLive ? 15 * 1000 : 60 * 1000;
-    },
+    refetchInterval: 60 * 1000,
     refetchIntervalInBackground: true,
     refetchOnMount: 'always',
     refetchOnReconnect: true,
@@ -368,17 +355,17 @@ export default function ResultsScreen() {
   });
 
   const competitionMaps = useMemo(() => {
-  const nameMap: Record<number, string> = {};
-  const logoMap: Record<number, string> = {};
+    const nameMap: Record<number, string> = {};
+    const logoMap: Record<number, string> = {};
 
-  (competitions ?? []).forEach((competition) => {
-    nameMap[competition.id] = competition.title;
-    if (competition.logo) {
-      logoMap[competition.id] = competition.logo;
-    }
-  });
+    (competitions ?? []).forEach((competition) => {
+      nameMap[competition.id] = competition.title;
+      if (competition.logo) {
+        logoMap[competition.id] = competition.logo;
+      }
+    });
 
-  return { nameMap, logoMap };
+    return { nameMap, logoMap };
   }, [competitions]);
   const competitionList = useMemo(() => competitions ?? ([] as CompetitionInfo[]), [competitions]);
 
@@ -404,32 +391,45 @@ export default function ResultsScreen() {
     });
   }, [allMatches, selectedDate, teamSearch]);
 
+  // Agrupa por competição e, dentro de cada uma, por jornada/eliminatória (estrutura do plugin)
   const groupedMatches = useMemo(() => {
-    const groups: Record<string, APIMatch[]> = {};
+    const byCompetition = new Map<number, APIMatch[]>();
 
     filteredMatches.forEach((match) => {
-      const key = String(match.competition_id ?? 0);
-      if (!groups[key]) {
-        groups[key] = [];
-      }
-      groups[key].push(match);
+      const key = Number(match.competition_id ?? 0);
+      const bucket = byCompetition.get(key) ?? [];
+      bucket.push(match);
+      byCompetition.set(key, bucket);
     });
 
-    const mapped = Object.entries(groups).map(([competitionIdRaw, matches]): MatchesGroup => {
-      const competitionId = Number(competitionIdRaw);
-      const competitionName = competitionMaps.nameMap[competitionId] ?? 'Competição';
-      const competitionLogo = competitionMaps.logoMap[competitionId];
-      const sortedMatches = [...matches].sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date));
+    const groups: MatchesGroup[] = Array.from(byCompetition.entries()).map(([competitionId, matches]) => {
+      const roundBuckets = new Map<string, APIMatch[]>();
+
+      matches.forEach((match) => {
+        const label =
+          match.round_label ??
+          (typeof match.matchday === 'number' && match.matchday > 0 ? `Jornada ${match.matchday}` : 'Jogos');
+        const bucket = roundBuckets.get(label) ?? [];
+        bucket.push(match);
+        roundBuckets.set(label, bucket);
+      });
+
+      const rounds: RoundGroup[] = Array.from(roundBuckets.entries()).map(([label, roundMatches]) => ({
+        label,
+        matches: [...roundMatches].sort((a, b) => getMatchTimestamp(a.date) - getMatchTimestamp(b.date)),
+      }));
+
+      rounds.sort((a, b) => getMatchTimestamp(a.matches[0]?.date) - getMatchTimestamp(b.matches[0]?.date));
 
       return {
         competitionId,
-        competitionName,
-        competitionLogo,
-        matches: sortedMatches,
+        competitionName: competitionMaps.nameMap[competitionId] ?? 'Competição',
+        competitionLogo: competitionMaps.logoMap[competitionId],
+        rounds,
       };
     });
 
-    return mapped.sort((a, b) => {
+    return groups.sort((a, b) => {
       const compA = competitionList.find((item) => item.id === a.competitionId);
       const compB = competitionList.find((item) => item.id === b.competitionId);
       const orderA = compA ? getCompetitionPopularityOrder(compA) : 999;
@@ -461,6 +461,25 @@ export default function ResultsScreen() {
     return null;
   }, [dateFilter, customDate]);
 
+  const renderRound = useCallback((round: RoundGroup, competition: { id: number; name: string; logo?: string }) => (
+    <View style={styles.roundBlock}>
+      <View style={styles.roundHeaderBar}>
+        <Text style={styles.roundHeaderTitle}>{round.label}</Text>
+      </View>
+      {round.matches.map((match, index) => (
+        <View key={match.id}>
+          <MatchRow
+            match={match}
+            compName={competition.name}
+            competitionId={competition.id}
+            compLogo={competition.logo}
+          />
+          {index < round.matches.length - 1 && <View style={styles.matchDivider} />}
+        </View>
+      ))}
+    </View>
+  ), []);
+
   const renderCompetitionGroup = useCallback(({ item }: { item: MatchesGroup }) => (
     <View style={styles.competitionSection}>
       <View style={styles.competitionHeader}>
@@ -471,25 +490,24 @@ export default function ResultsScreen() {
       </View>
 
       <View style={styles.competitionCard}>
-        {item.matches.map((match, index) => (
-          <View key={match.id}>
-            <MatchRow
-              match={match}
-              compName={item.competitionName}
-              competitionId={item.competitionId}
-              compLogo={item.competitionLogo}
-            />
-            {index < item.matches.length - 1 && <View style={styles.matchDivider} />}
+        {item.rounds.map((round, roundIdx) => (
+          <View key={`${item.competitionId}-${round.label}`}>
+            {roundIdx > 0 && <View style={styles.roundSeparator} />}
+            {renderRound(round, {
+              id: item.competitionId,
+              name: item.competitionName,
+              logo: item.competitionLogo,
+            })}
           </View>
         ))}
       </View>
     </View>
-  ), []);
+  ), [renderRound]);
 
   const keyExtractor = useCallback((item: MatchesGroup) => `competition-${item.competitionId}`, []);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}> 
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View style={styles.headerBrand}>
           <Image source={{ uri: APP_LOGO_URL }} style={styles.headerLogo} resizeMode="contain" />
@@ -561,6 +579,15 @@ export default function ResultsScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>A carregar jogos...</Text>
+        </View>
+      ) : error && groupedMatches.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📡</Text>
+          <Text style={styles.emptyTitle}>Erro ao carregar</Text>
+          <Text style={styles.emptySubtitle}>Não foi possível obter os jogos. Verifica a ligação.</Text>
+          <Pressable style={styles.retryBtn} onPress={() => refetch()}>
+            <Text style={styles.retryBtnText}>Tentar novamente</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -765,117 +792,103 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+  roundBlock: {},
+  roundSeparator: {
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  roundHeaderBar: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: Colors.surfaceLight,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  roundHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '800' as const,
+    color: Colors.text,
+  },
+  matchBlock: {
+    paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: Colors.surface,
   },
-  matchTeams: {
-    flex: 1,
-    gap: 6,
-  },
-  teamRow: {
+  matchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  teamLogo: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-  },
-  teamDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  teamDotText: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: Colors.primary,
-  },
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#EF4444',
-  },
-  liveText: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: '#EF4444',
   },
   teamName: {
-    fontSize: 13,
-    fontWeight: '500' as const,
-    color: Colors.textSecondary,
     flex: 1,
+    fontSize: 13.5,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
+  teamNameHome: {
+    textAlign: 'right' as const,
+    paddingRight: 12,
+  },
+  teamNameAway: {
+    textAlign: 'left' as const,
+    paddingLeft: 12,
   },
   winnerName: {
     color: Colors.text,
-    fontWeight: '700' as const,
-  },
-  matchScoreSection: {
-    minWidth: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  finishedScores: {
-    gap: 4,
-    alignItems: 'center',
-  },
-  scoreText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-    textAlign: 'center' as const,
-    minWidth: 20,
-  },
-  winnerScore: {
-    color: Colors.text,
     fontWeight: '800' as const,
   },
-  resultBadge: {
-    backgroundColor: Colors.surfaceLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+  matchCenter: {
+    width: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
   },
-  resultBadgeText: {
+  scoreText: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: Colors.textSecondary,
+    fontVariant: ['tabular-nums'],
+  },
+  scoreWinner: {
+    color: Colors.text,
+    fontWeight: '900' as const,
+  },
+  centerDate: {
     fontSize: 11,
     fontWeight: '700' as const,
+    color: Colors.textSecondary,
+  },
+  centerTime: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: Colors.primary,
+  },
+  centerMuted: {
+    fontSize: 11,
+    fontWeight: '600' as const,
     color: Colors.textMuted,
   },
-  scheduledBadge: {
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  scheduledText: {
+  stadiumText: {
+    marginTop: 5,
     fontSize: 11,
-    fontWeight: '700' as const,
-    color: Colors.primary,
+    color: Colors.textMuted,
+    textAlign: 'center' as const,
   },
   matchDivider: {
     height: 1,
     backgroundColor: Colors.border,
-    marginLeft: 52,
-    marginRight: 12,
+    marginHorizontal: 12,
+  },
+  retryBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  retryBtnText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
   },
   emptyState: {
     alignItems: 'center',

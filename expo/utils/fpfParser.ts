@@ -149,7 +149,7 @@ function parseArticle(html: string): FpfParsedMatch | null {
 function parseStandings(html: string): StandingRow[] {
   const rows: StandingRow[] = [];
 
-  const tables = [...html.matchAll(/<table class="fpf-classificacao-table">([\s\S]*?)<\/table>/g)];
+  const tables = [...html.matchAll(/<table[^>]*fpf-classificacao-table[^>]*>([\s\S]*?)<\/table>/g)];
   tables.forEach((tableMatch) => {
     const trMatches = [...tableMatch[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)];
 
@@ -194,7 +194,10 @@ function parseStandings(html: string): StandingRow[] {
 
 /** Analisa uma página de competição e devolve jornadas/eliminatórias + classificação. */
 export function parseFpfPage(html: string): FpfPageData {
-  const standingsStart = html.indexOf('fpf-classificacao');
+  // O plugin injeta um bloco <style> com .fpf-classificacao-table{...} antes dos jogos,
+  // por isso temos de cortar na <table> real e não na primeira ocorrência do nome.
+  const tableMatch = html.match(/<table[^>]*fpf-classificacao-table[^>]*>/);
+  const standingsStart = tableMatch?.index ?? -1;
   const matchesHtml = standingsStart >= 0 ? html.slice(0, standingsStart) : html;
   const standingsHtml = standingsStart >= 0 ? html.slice(standingsStart) : '';
 
@@ -274,6 +277,7 @@ export function buildFpfMatches(rounds: FpfRoundData[], competitionId: number): 
         result_final: scoreText,
         status: match.score ? 'finished' : 'scheduled',
         date: match.date ?? '',
+        stadium: match.stadium,
       });
     });
   });
