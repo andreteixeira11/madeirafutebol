@@ -223,7 +223,7 @@ export const FEATURED_COMPETITIONS: FeaturedCompetition[] = [
   { shortName: 'II Liga', order: 1, category: 'seniores', aliases: ['ii liga', 'liga portugal 2 meu super', 'liga 2', 'segunda liga', 'meu super'] },
   { id: 2161, shortName: 'Campeonato de Portugal', order: 2, category: 'seniores', aliases: ['campeonato de portugal'] },
   { id: 27629, shortName: 'Liga Next Gen', order: 3, category: 'seniores', aliases: ['liga revelação', 'liga revelacao', 'liga next gen'] },
-  { id: 1, shortName: 'Divisão de Honra Regional', order: 4, category: 'seniores', aliases: ['divisão de honra regional', 'divisao de honra regional', 'divisão de honra'] },
+  { id: 73839, shortName: 'Divisão de Honra Regional', order: 4, category: 'seniores', aliases: ['divisão de honra regional', 'divisao de honra regional', 'divisão de honra', 'divisao honra regional'] },
   { id: 2, shortName: 'Campeonato Regional 1 Divisão Seniores', order: 5, category: 'seniores', aliases: ['campeonato regional 1 divisao seniores', 'campeonato regional 1 divisão seniores', '1ª divisão regional', '1 divisao regional'] },
   { shortName: 'Campeonato Nacional BPI', order: 6, category: 'femininos', aliases: ['campeonato nacional bpi', 'bpi'] },
   { shortName: 'Femininos Regionais', order: 7, category: 'femininos', aliases: ['femininos regionais', 'regional feminino'] },

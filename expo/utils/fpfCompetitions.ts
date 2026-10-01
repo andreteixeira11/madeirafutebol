@@ -30,6 +30,18 @@ export const FPF_COMPETITIONS: FpfCompetitionMeta[] = [
   { id: 27629, slug: 'liga-revelacao-serie-a', name: 'Liga Next Gen - 1ª Fase', logo: 'https://www.madeirafutebol.com/wp-content/uploads/2026/08/liga-revelecao-logo-32x32.png' },
   { id: 5702, slug: 'campeonato-nacional-juniores-a-ii-divisao', name: 'Campeonato Nacional II Divisão Jun.A – Série B', logo: 'https://www.madeirafutebol.com/wp-content/uploads/2023/08/junioresiidivisao-32x32.png' },
 
+  // Séniores regionais
+  { id: 73839, slug: 'divisao-honra-regional-seniores', name: 'Divisão Honra Regional - Seniores - Fut. 11', logo: AF_MADEIRA_LOGO },
+
+  // Futsal
+  { id: 78306, slug: 'taca-da-madeira-seniores-futsal-1fase', name: 'Taça da Madeira Seniores - Futsal 1.ª Fase', logo: AF_MADEIRA_LOGO },
+  { id: 102866, slug: 'taca-da-madeira-futsal-juniores', name: 'Taça da Madeira Futsal de Juniores - 1ª Fase', logo: AF_MADEIRA_LOGO },
+  { id: 73464, slug: 'taca-da-madeira-futsal-juvenis', name: 'Taça da Madeira Futsal de Juvenis - 1ª Fase', logo: AF_MADEIRA_LOGO },
+  { id: 75416, slug: 'campeonato-divisao-de-honra-regional-iniciados-futsal', name: 'Campeonato Divisão de Honra Regional Iniciados - Futsal', logo: AF_MADEIRA_LOGO },
+  { id: 60058, slug: 'camp-divisao-honra-regional-de-infantis-futsal-serie-a', name: 'C. D. Honra Regional de Infantis - Futsal - Série "A"', logo: AF_MADEIRA_LOGO },
+  { id: 92462, slug: 'camp-divisao-honra-regional-de-infantis-futsal-serie-b', name: 'C. D. Honra Regional de Infantis - Futsal - Série "B"', logo: AF_MADEIRA_LOGO },
+  { id: 92463, slug: 'camp-divisao-honra-regional-de-infantis-futsal-serie-c', name: 'C. D. Honra Regional de Infantis - Futsal - Série "C"', logo: AF_MADEIRA_LOGO },
+
   // Supertaças regionais
   { id: 102319, slug: 'supertaca-regional-iniciados-futebol', name: 'Supertaça Regional de Iniciados - Futebol', logo: AF_MADEIRA_LOGO },
   { id: 102305, slug: 'supertaca-regional-juniores-futebol', name: 'Supertaça Regional de Juniores - Futebol', logo: AF_MADEIRA_LOGO },
