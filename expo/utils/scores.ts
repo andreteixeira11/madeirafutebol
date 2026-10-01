@@ -40,6 +40,10 @@ const DEFAULT_API_BASES = [
 
 const envApiBase = process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.trim() ?? '';
 
+// Proxy server-side (Cloudflare Worker): contorna o CORS no preview web e
+// reduz a carga no site em caso de falha do fetch direto.
+const PROXY_BASE = process.env.EXPO_PUBLIC_RORK_FUNCTIONS_URL?.trim() ?? '';
+
 const API_BASES = [envApiBase, ...DEFAULT_API_BASES].filter(
   (value, index, array) => value.length > 0 && array.indexOf(value) === index,
 );
@@ -112,7 +116,30 @@ async function fetchApiJson<T>(path: string): Promise<T> {
     }
   }
 
+  // Fallback: proxy server-side (resolve CORS no preview web / falhas diretas)
+  try {
+    return (await fetchViaProxy(path)) as T;
+  } catch (proxyError) {
+    lastError = proxyError instanceof Error ? proxyError : new Error('Proxy request error');
+  }
+
   throw lastError ?? new Error(`Failed to fetch ${path}`);
+}
+
+/** Fallback via proxy Rork (usado quando o fetch direto falha, p. ex. CORS no web). */
+async function fetchViaProxy(path: string): Promise<unknown> {
+  if (!PROXY_BASE) throw new Error('No proxy base configured');
+
+  const response = await fetch(`${PROXY_BASE}/fpf/competitions`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Proxy failed for ${path}: ${response.status}`);
+  }
+
+  return (await response.json()) as unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,15 +158,37 @@ async function fetchFpfPage(slug: string): Promise<string> {
     return cached.html;
   }
 
-  const response = await fetch(url, { method: 'GET', headers: HTTP_HEADERS });
+  let html: string;
+  try {
+    const response = await fetch(url, { method: 'GET', headers: HTTP_HEADERS });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch competition page ${slug}: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch competition page ${slug}: ${response.status}`);
+    }
+
+    html = await response.text();
+  } catch (error) {
+    // Web (CORS bloqueado), rate-limit ou rede indisponível → proxy server-side
+    html = await fetchFpfPageViaProxy(slug);
   }
 
-  const html = await response.text();
   pageCache.set(slug, { html, at: now });
   return html;
+}
+
+async function fetchFpfPageViaProxy(slug: string): Promise<string> {
+  if (!PROXY_BASE) throw new Error('No proxy base configured');
+
+  const response = await fetch(`${PROXY_BASE}/fpf/page?slug=${encodeURIComponent(slug)}`, {
+    method: 'GET',
+    headers: { Accept: 'text/html' },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Proxy failed for page ${slug}: ${response.status}`);
+  }
+
+  return response.text();
 }
 
 async function fetchFpfMatchesForCompetition(competitionId: number): Promise<APIMatch[]> {
