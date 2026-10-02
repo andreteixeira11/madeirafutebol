@@ -127,6 +127,25 @@ export default {
       });
     }
 
+    // GET /fpf/teams?competition_id=<id> — equipas da API do site (com logos)
+    if (url.pathname === "/fpf/teams") {
+      const competitionId = url.searchParams.get("competition_id") ?? "";
+      if (!/^\d{1,7}$/.test(competitionId)) {
+        return jsonResponse({ error: "invalid_competition_id" }, 400);
+      }
+
+      return cachedResponse(request, 600, async () => {
+        const upstream = await fetchWithRetry(
+          `${SITE_BASE}/wp-json/mf/v3/teams?competition_id=${competitionId}`,
+        );
+        const body = await upstream.text();
+        return new Response(body, {
+          status: upstream.status,
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        });
+      });
+    }
+
     // GET /fpf/competitions — lista de competições da API do site
     if (url.pathname === "/fpf/competitions") {
       return cachedResponse(request, 300, async () => {

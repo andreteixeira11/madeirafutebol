@@ -130,10 +130,11 @@ async function fetchApiJson<T>(path: string): Promise<T> {
 async function fetchViaProxy(path: string): Promise<unknown> {
   if (!PROXY_BASE) throw new Error('No proxy base configured');
 
-  const response = await fetch(`${PROXY_BASE}/fpf/competitions`, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  });
+  const [pathname, query] = path.split('?');
+  const response = await fetch(
+    `${PROXY_BASE}/fpf${pathname}${query ? `?${query}` : ''}`,
+    { method: 'GET', headers: { Accept: 'application/json' } },
+  );
 
   if (!response.ok) {
     throw new Error(`Proxy failed for ${path}: ${response.status}`);
@@ -195,9 +196,114 @@ async function fetchFpfMatchesForCompetition(competitionId: number): Promise<API
   const meta = getFpfMetaForId(competitionId);
   if (!meta) return [];
 
-  const html = await fetchFpfPage(meta.slug);
+  const [html, teams] = await Promise.all([
+    fetchFpfPage(meta.slug),
+    fetchTeamsForCompetition(competitionId),
+  ]);
+
   const page = parseFpfPage(html);
-  return buildFpfMatches(page.rounds, competitionId);
+  const matches = buildFpfMatches(page.rounds, competitionId);
+  return attachMatchLogos(matches, buildTeamLogoMap(teams));
+}
+
+// ---------------------------------------------------------------------------
+// Equipas e logotipos (API /wp-json/mf/v3/teams do site)
+// ---------------------------------------------------------------------------
+
+interface ApiTeam {
+  id: number;
+  name: string;
+  logo: string;
+}
+
+const TEAMS_CACHE_TTL = 10 * 60 * 1000;
+const teamsCache = new Map<number, { teams: ApiTeam[]; at: number }>();
+
+/** Equipas de uma competição (nomes + logos). Falha devolve lista vazia (fallback: iniciais). */
+async function fetchTeamsForCompetition(competitionId: number): Promise<ApiTeam[]> {
+  const cached = teamsCache.get(competitionId);
+  const now = Date.now();
+
+  if (cached && now - cached.at < TEAMS_CACHE_TTL) {
+    return cached.teams;
+  }
+
+  let teams: ApiTeam[] = [];
+
+  try {
+    const raw = await fetchApiJson<unknown>(`/teams?competition_id=${competitionId}`);
+
+    if (Array.isArray(raw)) {
+      teams = (raw as unknown[])
+        .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+        .map((item) => ({
+          id: Number(item.id ?? 0),
+          name: decodeHtmlEntities(getSafeString(item.name)),
+          logo: getSafeString(item.logo),
+        }))
+        .filter((team) => team.name.length > 0);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown error';
+    console.log(`[Teams] Fetch failed for competition ${competitionId}: ${message}`);
+  }
+
+  teamsCache.set(competitionId, { teams, at: now });
+  return teams;
+}
+
+/** Chave de comparação de nomes de equipas: sem acentos, pontuação ou maiúsculas. */
+function normalizeTeamKey(value: string): string {
+  return decodeHtmlEntities(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function buildTeamLogoMap(teams: ApiTeam[]): Map<string, string> {
+  const logoMap = new Map<string, string>();
+
+  teams.forEach((team) => {
+    if (!team.logo) return;
+    // A API devolve miniaturas (-32x32); a versão original existe sem o sufixo
+    const fullSize = team.logo.replace(/-\d+x\d+(\.\w+)$/, '$1');
+    logoMap.set(normalizeTeamKey(team.name), fullSize);
+  });
+
+  return logoMap;
+}
+
+/**
+ * Resolve o logo de uma equipa pelo nome. Os nomes do HTML do plugin diferem
+ * da API em maiúsculas/acéntos/aspas — a chave normalizada resolve quase tudo;
+ * a correspondência parcial cobre abreviações restantes (ex. "SC" vs "Sporting").
+ */
+function resolveTeamLogo(logoMap: Map<string, string>, teamName: string): string {
+  const key = normalizeTeamKey(teamName);
+  if (!key) return '';
+
+  const exact = logoMap.get(key);
+  if (exact) return exact;
+
+  for (const [candidate, logo] of logoMap.entries()) {
+    if (candidate.length >= 8 && (candidate.includes(key) || key.includes(candidate))) {
+      return logo;
+    }
+  }
+
+  return '';
+}
+
+function attachMatchLogos(matches: APIMatch[], logoMap: Map<string, string>): APIMatch[] {
+  if (logoMap.size === 0) return matches;
+
+  return matches.map((match) => ({
+    ...match,
+    team1_logo: match.team1_logo || resolveTeamLogo(logoMap, match.team1),
+    team2_logo: match.team2_logo || resolveTeamLogo(logoMap, match.team2),
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -509,8 +615,12 @@ export async function fetchCompetitionDetail(
     };
   }
 
-  const html = await fetchFpfPage(meta.slug);
+  const [html, teams] = await Promise.all([
+    fetchFpfPage(meta.slug),
+    fetchTeamsForCompetition(competitionId),
+  ]);
   const page = parseFpfPage(html);
+  const logoMap = buildTeamLogoMap(teams);
 
   // Taças: nome com "taça"/"cup" ou rondas todas sem número (só títulos de eliminatória)
   const isCupFormat =
@@ -525,9 +635,19 @@ export async function fetchCompetitionDetail(
       id,
       label: round.label,
       number: round.number,
-      matches: allMatches.filter((match) => match.matchday === id),
+      matches: attachMatchLogos(
+        allMatches.filter((match) => match.matchday === id),
+        logoMap,
+      ),
     };
   });
+
+  const standings = logoMap.size
+    ? page.standings.map((row) => ({
+        ...row,
+        teamLogo: row.teamLogo || resolveTeamLogo(logoMap, row.teamName),
+      }))
+    : page.standings;
 
   return {
     competition: {
@@ -537,6 +657,6 @@ export async function fetchCompetitionDetail(
       format: isCupFormat ? 'cup' : 'league',
     },
     rounds,
-    standings: page.standings,
+    standings,
   };
 }

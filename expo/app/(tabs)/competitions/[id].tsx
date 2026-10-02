@@ -122,8 +122,8 @@ export default function CompetitionDetailScreen() {
     }));
   }, [rounds]);
 
-  // Jornada/eliminatória atual: ronda com jogos ao vivo → ronda cujo intervalo
-  // de datas contém agora → ronda com jogos hoje → primeira (pré-época) / última (pós-época)
+  // Jornada/eliminatória atual: ronda com jogos ao vivo → primeira ronda ainda
+  // não terminada (em curso ou a seguir) → última ronda (época terminada)
   const currentRoundId = useMemo(() => {
     if (rounds.length === 0) return 0;
 
@@ -131,10 +131,6 @@ export default function CompetitionDetailScreen() {
     if (liveRound) return liveRound.id;
 
     const now = Date.now();
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const dayStartMs = dayStart.getTime();
-    const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000;
 
     const datedRounds = rounds
       .map((round) => {
@@ -157,15 +153,17 @@ export default function CompetitionDetailScreen() {
       return roundOptions[roundOptions.length - 1]?.value ?? 0;
     }
 
-    const containing = datedRounds.find((round) => round.minTime <= now && now <= round.maxTime);
-    if (containing) return containing.id;
+    // Em curso (contém agora) ou a próxima — cobre os dias entre jornadas
+    const ongoingOrNext = datedRounds.find((round) => round.maxTime >= now);
+    if (ongoingOrNext) return ongoingOrNext.id;
 
-    const todayRound = datedRounds.find((round) => round.maxTime >= dayStartMs && round.minTime < dayEndMs);
-    if (todayRound) return todayRound.id;
-
-    if (now < datedRounds[0].minTime) return datedRounds[0].id;
     return datedRounds[datedRounds.length - 1].id;
   }, [rounds, roundOptions]);
+
+  // Nova competição: repor a seleção para abrir na jornada atual
+  useEffect(() => {
+    setSelectedRoundId(null);
+  }, [competitionId]);
 
   useEffect(() => {
     if (hasInitializedRound) {
