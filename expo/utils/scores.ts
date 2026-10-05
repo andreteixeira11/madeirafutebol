@@ -596,8 +596,19 @@ export async function fetchCompetitionStandings(competitionId: number): Promise<
   const meta = getFpfMetaForId(competitionId);
   if (!meta) return [];
 
-  const html = await fetchFpfPage(meta.slug);
-  return parseFpfPage(html).standings;
+  const [html, teams] = await Promise.all([
+    fetchFpfPage(meta.slug),
+    fetchTeamsForCompetition(competitionId),
+  ]);
+  const page = parseFpfPage(html);
+  const logoMap = buildTeamLogoMap(teams);
+
+  if (logoMap.size === 0) return page.standings;
+
+  return page.standings.map((row) => ({
+    ...row,
+    teamLogo: row.teamLogo || resolveTeamLogo(logoMap, row.teamName),
+  }));
 }
 
 /**

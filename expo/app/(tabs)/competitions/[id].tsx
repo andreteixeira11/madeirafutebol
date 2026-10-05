@@ -122,9 +122,10 @@ export default function CompetitionDetailScreen() {
     }));
   }, [rounds]);
 
-  // Jornada/eliminatória atual: ronda com jogos ao vivo → ronda com a maioria
-  // dos jogos ainda por jogar na semana atual (jogos adiados de rondas antigas
-  // contam pouco contra a ronda em curso) → próxima ronda → última ronda
+  // Jornada/eliminatória atual: ronda com jogos ao vivo → próxima jornada
+  // (primeira ronda em que a maioria dos jogos ainda está por disputar —
+  // jogos adiados isolados de rondas antigas nunca arrastam a jornada atual)
+  // → última ronda
   const currentRoundId = useMemo(() => {
     if (rounds.length === 0) return 0;
 
@@ -132,7 +133,6 @@ export default function CompetitionDetailScreen() {
     if (liveRound) return liveRound.id;
 
     const now = Date.now();
-    const activeWindowMs = 3 * 24 * 60 * 60 * 1000;
 
     const datedRounds = rounds
       .map((round) => {
@@ -143,46 +143,24 @@ export default function CompetitionDetailScreen() {
 
         if (timestamps.length === 0) return null;
 
-        // Jogos "ativos": por disputar (sem resultado) dentro da janela da semana atual
-        const activeCount = matches.filter((match) => {
+        const upcomingCount = matches.filter((match) => {
           const timestamp = getMatchTimestamp(match.date);
-          return (
-            timestamp > 0 &&
-            Math.abs(timestamp - now) <= activeWindowMs &&
-            !isMatchFinished(match)
-          );
+          return timestamp > 0 && timestamp >= now && !isMatchFinished(match);
         }).length;
 
-        return {
-          id: round.id,
-          minTime: Math.min(...timestamps),
-          maxTime: Math.max(...timestamps),
-          activeCount,
-        };
+        return { id: round.id, matchCount: timestamps.length, upcomingCount };
       })
-      .filter((round): round is { id: number; minTime: number; maxTime: number; activeCount: number } => !!round)
+      .filter((round): round is { id: number; matchCount: number; upcomingCount: number } => !!round)
       .sort((a, b) => a.id - b.id);
 
     if (datedRounds.length === 0) {
       return roundOptions[roundOptions.length - 1]?.value ?? 0;
     }
 
-    // Ronda com mais jogos por jogar nesta semana (empate → ronda mais avançada)
-    let best = datedRounds[0];
-    for (const round of datedRounds) {
-      if (
-        round.activeCount > best.activeCount ||
-        (round.activeCount > 0 && round.activeCount === best.activeCount && round.id > best.id)
-      ) {
-        best = round;
-      }
-    }
-    if (best.activeCount > 0) return best.id;
+    const upcoming = datedRounds.find((round) => round.upcomingCount * 2 >= round.matchCount);
+    if (upcoming) return upcoming.id;
 
-    // Sem jogos ativos: próxima ronda (ou primeira/última nas extremidades da época)
-    if (now < datedRounds[0].minTime) return datedRounds[0].id;
-    const upcoming = datedRounds.find((round) => round.maxTime >= now);
-    return upcoming ? upcoming.id : datedRounds[datedRounds.length - 1].id;
+    return datedRounds[datedRounds.length - 1].id;
   }, [rounds, roundOptions]);
 
   // Nova competição: repor a seleção para abrir na jornada atual
