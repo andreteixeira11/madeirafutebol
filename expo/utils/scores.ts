@@ -159,8 +159,13 @@ async function fetchFpfPage(slug: string): Promise<string> {
     return cached.html;
   }
 
+  // Proxy primeiro: respostas idênticas em web e nativo, com cache de edge,
+  // retry e headers de browser — imune a CORS, rate-limit e bloqueios de bot.
+  // O fetch direto fica como fallback caso o proxy esteja indisponível.
   let html: string;
   try {
+    html = await fetchFpfPageViaProxy(slug);
+  } catch {
     const response = await fetch(url, { method: 'GET', headers: HTTP_HEADERS });
 
     if (!response.ok) {
@@ -168,9 +173,6 @@ async function fetchFpfPage(slug: string): Promise<string> {
     }
 
     html = await response.text();
-  } catch (error) {
-    // Web (CORS bloqueado), rate-limit ou rede indisponível → proxy server-side
-    html = await fetchFpfPageViaProxy(slug);
   }
 
   pageCache.set(slug, { html, at: now });

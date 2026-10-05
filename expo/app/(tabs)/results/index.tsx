@@ -68,6 +68,35 @@ function CompetitionLogo({ uri }: { uri?: string }) {
   );
 }
 
+function TeamLogo({ uri, fallback, size = 18 }: { uri?: string; fallback: string; size?: number }) {
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: 3 }}
+        resizeMode="contain"
+      />
+    );
+  }
+
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: Colors.primaryLight,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ fontSize: size * 0.45, fontWeight: '700' as const, color: Colors.primary }}>
+        {fallback.charAt(0)}
+      </Text>
+    </View>
+  );
+}
+
 /** Linha de jogo ao estilo do plugin: equipa casa | resultado/data | equipa fora + estádio. */
 const MatchRow = React.memo(function MatchRow({
   match,
@@ -138,13 +167,19 @@ const MatchRow = React.memo(function MatchRow({
     <Pressable onPress={handlePress} onPressIn={onPressIn} onPressOut={onPressOut} testID={`match-${match.id}`}>
       <Animated.View style={[styles.matchBlock, { transform: [{ scale: scaleAnim }] }]}>
         <View style={styles.matchRow}>
-          <Text style={[styles.teamName, styles.teamNameHome, homeWin && styles.winnerName]} numberOfLines={1}>
-            {match.team1}
-          </Text>
+          <View style={[styles.teamSide, styles.teamSideHome]}>
+            <Text style={[styles.teamName, styles.teamNameHome, homeWin && styles.winnerName]} numberOfLines={1}>
+              {match.team1}
+            </Text>
+            <TeamLogo uri={match.team1_logo} fallback={match.team1} />
+          </View>
           <View style={styles.matchCenter}>{centerContent}</View>
-          <Text style={[styles.teamName, styles.teamNameAway, awayWin && styles.winnerName]} numberOfLines={1}>
-            {match.team2}
-          </Text>
+          <View style={[styles.teamSide, styles.teamSideAway]}>
+            <TeamLogo uri={match.team2_logo} fallback={match.team2} />
+            <Text style={[styles.teamName, styles.teamNameAway, awayWin && styles.winnerName]} numberOfLines={1}>
+              {match.team2}
+            </Text>
+          </View>
         </View>
         {match.stadium ? <Text style={styles.stadiumText}>{match.stadium}</Text> : null}
       </Animated.View>
@@ -818,19 +853,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  teamName: {
+  teamSide: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  teamSideHome: {
+    justifyContent: 'flex-end' as const,
+  },
+  teamSideAway: {
+    justifyContent: 'flex-start' as const,
+  },
+  teamName: {
     fontSize: 13.5,
     fontWeight: '600' as const,
     color: Colors.textSecondary,
   },
   teamNameHome: {
+    flexShrink: 1,
     textAlign: 'right' as const,
-    paddingRight: 12,
+    paddingLeft: 12,
   },
   teamNameAway: {
+    flexShrink: 1,
     textAlign: 'left' as const,
-    paddingLeft: 12,
+    paddingRight: 12,
   },
   winnerName: {
     color: Colors.text,
