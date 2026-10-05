@@ -23,6 +23,7 @@ import {
   extractScore,
   fetchAllMatchesMerged,
   fetchCompetitionsLogos,
+  isSuperCupName,
   parseMatchDate,
   getMatchTimestamp,
   CompetitionInfo,
@@ -438,12 +439,15 @@ export default function ResultsScreen() {
     });
 
     const groups: MatchesGroup[] = Array.from(byCompetition.entries()).map(([competitionId, matches]) => {
+      const competitionName = competitionMaps.nameMap[competitionId] ?? 'Competição';
       const roundBuckets = new Map<string, APIMatch[]>();
 
       matches.forEach((match) => {
-        const label =
-          match.round_label ??
-          (typeof match.matchday === 'number' && match.matchday > 0 ? `Jornada ${match.matchday}` : 'Jogos');
+        // Supertaças: jogo único — sem título de jornada
+        const label = isSuperCupName(competitionName)
+          ? ''
+          : match.round_label ??
+            (typeof match.matchday === 'number' && match.matchday > 0 ? `Jornada ${match.matchday}` : 'Jogos');
         const bucket = roundBuckets.get(label) ?? [];
         bucket.push(match);
         roundBuckets.set(label, bucket);
@@ -458,7 +462,7 @@ export default function ResultsScreen() {
 
       return {
         competitionId,
-        competitionName: competitionMaps.nameMap[competitionId] ?? 'Competição',
+        competitionName,
         competitionLogo: competitionMaps.logoMap[competitionId],
         rounds,
       };
@@ -498,9 +502,11 @@ export default function ResultsScreen() {
 
   const renderRound = useCallback((round: RoundGroup, competition: { id: number; name: string; logo?: string }) => (
     <View style={styles.roundBlock}>
-      <View style={styles.roundHeaderBar}>
-        <Text style={styles.roundHeaderTitle}>{round.label}</Text>
-      </View>
+      {round.label ? (
+        <View style={styles.roundHeaderBar}>
+          <Text style={styles.roundHeaderTitle}>{round.label}</Text>
+        </View>
+      ) : null}
       {round.matches.map((match, index) => (
         <View key={match.id}>
           <MatchRow

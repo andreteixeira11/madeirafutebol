@@ -22,6 +22,7 @@ import {
   getMatchTimestamp,
   isMatchFinished,
   isMatchLive,
+  isSuperCupName,
   parseMatchDate,
 } from '@/utils/scores';
 
@@ -112,6 +113,8 @@ export default function CompetitionDetailScreen() {
   const compTitle = detail?.competition.name ?? fallbackTitle;
   const compLogo = detail?.competition.logo;
   const isCupFormat = detail?.competition.format === 'cup';
+  // Supertaças: jogo único — sem seletor de jornada nem título de eliminatória
+  const isSuperCup = isSuperCupName(compTitle);
 
   const rounds = useMemo(() => detail?.rounds ?? [], [detail]);
 
@@ -358,7 +361,7 @@ export default function CompetitionDetailScreen() {
       );
     }
 
-    if (roundOptions.length > 0) {
+    if (roundOptions.length > 0 && !isSuperCup) {
       return (
         <View style={styles.roundPickerSection}>
           <Text style={styles.roundPickerLabel}>
@@ -378,12 +381,18 @@ export default function CompetitionDetailScreen() {
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>⚽</Text>
           <Text style={styles.emptyTitle}>
-            {isCupFormat ? 'Sem jogos nesta eliminatória' : 'Sem jogos nesta jornada'}
+            {isSuperCup
+              ? 'Sem jogos registados'
+              : isCupFormat
+                ? 'Sem jogos nesta eliminatória'
+                : 'Sem jogos nesta jornada'}
           </Text>
           <Text style={styles.emptySubtitle}>
-            {isCupFormat
-              ? 'Esta eliminatória ainda não tem jogos disponíveis'
-              : 'Esta jornada ainda não tem jogos disponíveis'}
+            {isSuperCup
+              ? 'Ainda não existem jogos disponíveis para esta supertaça'
+              : isCupFormat
+                ? 'Esta eliminatória ainda não tem jogos disponíveis'
+                : 'Esta jornada ainda não tem jogos disponíveis'}
           </Text>
         </View>
       );
@@ -391,9 +400,11 @@ export default function CompetitionDetailScreen() {
 
     return (
       <View style={styles.roundCard}>
-        <View style={styles.roundHeader}>
-          <Text style={styles.roundTitle}>{selectedRoundLabel}</Text>
-        </View>
+        {!isSuperCup ? (
+          <View style={styles.roundHeader}>
+            <Text style={styles.roundTitle}>{selectedRoundLabel}</Text>
+          </View>
+        ) : null}
 
         {dateGroups.map((dateGroup) => (
           <View key={dateGroup.key}>
@@ -402,7 +413,7 @@ export default function CompetitionDetailScreen() {
             </View>
 
             {dateGroup.matches.map((match, mIdx) =>
-              renderMatchCard(match, selectedRoundLabel, mIdx, dateGroup.matches.length),
+              renderMatchCard(match, isSuperCup ? '' : selectedRoundLabel, mIdx, dateGroup.matches.length),
             )}
           </View>
         ))}

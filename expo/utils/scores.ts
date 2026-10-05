@@ -205,7 +205,12 @@ async function fetchFpfMatchesForCompetition(competitionId: number): Promise<API
 
   const page = parseFpfPage(html);
   const matches = buildFpfMatches(page.rounds, competitionId);
-  return attachMatchLogos(matches, buildTeamLogoMap(teams));
+  const withLogos = attachMatchLogos(matches, buildTeamLogoMap(teams));
+
+  // Supertaças: jogo único — sem título de jornada nem eliminatória
+  if (!isSuperCupName(meta.name)) return withLogos;
+
+  return withLogos.map((match) => ({ ...match, matchday: 0, round_label: undefined }));
 }
 
 // ---------------------------------------------------------------------------
@@ -345,6 +350,17 @@ export function isCupCompetitionName(value: string): boolean {
   // Competições com fases finais por eliminatórias
   if (normalized.includes('eliminatoria') || normalized.includes('play-off') || normalized.includes('playoff')) return true;
   return false;
+}
+
+/** Supertaças: jogo único, sem jornadas nem eliminatórias. */
+export function isSuperCupName(value: string): boolean {
+  const normalized = normalizeText(value);
+  return (
+    normalized.includes('supertaca') ||
+    normalized.includes('super taca') ||
+    normalized.includes('supercopa') ||
+    normalized.includes('super copa')
+  );
 }
 
 /** Deteta formato eliminatório a partir dos jogos (mantido por compatibilidade). */
@@ -642,16 +658,19 @@ export async function fetchCompetitionDetail(
 
   const allMatches = buildFpfMatches(page.rounds, competitionId);
 
+  // Supertaças: jogo único — esconder qualquer título de jornada/eliminatória
+  const isSuperCup = isSuperCupName(meta.name);
+
   const rounds = page.rounds.map((round, index) => {
     const id = round.number ?? index + 1;
     return {
       id,
-      label: round.label,
+      label: isSuperCup ? '' : round.label,
       number: round.number,
       matches: attachMatchLogos(
         allMatches.filter((match) => match.matchday === id),
         logoMap,
-      ),
+      ).map((match) => (isSuperCup ? { ...match, matchday: 0, round_label: undefined } : match)),
     };
   });
 
