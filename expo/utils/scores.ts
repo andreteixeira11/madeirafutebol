@@ -391,6 +391,16 @@ function getFeaturedCompetitionMeta(competition: CompetitionInfo): {
 } {
   const normalizedTitle = normalizeText(competition.title);
 
+  // Futsal é sempre categorizado à parte do futebol, independentemente do
+  // escalão (iniciados/juvenis/juniores) ou do nome da taça/campeonato
+  if (normalizedTitle.includes('futsal')) {
+    return {
+      order: 8,
+      shortName: competition.title,
+      category: 'futsal',
+    };
+  }
+
   if (
     normalizedTitle.includes('liga portugal 2') ||
     normalizedTitle.includes('ii liga') ||
