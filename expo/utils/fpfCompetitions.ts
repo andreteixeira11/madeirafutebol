@@ -93,17 +93,10 @@ export const FPF_COMPETITIONS: FpfCompetitionMeta[] = [
 
 /**
  * Competições incluídas no feed de resultados (ecrã Resultados, filtro por data).
- * Mantemos apenas as principais para não pesquisar dezenas de páginas em cada
- * atualização; todas as competições continuam disponíveis no separador Competições.
+ * Inclui todas as competições do manifesto — incluindo supertaças — para que
+ * nenhum jogo fique de fora de nenhum dia.
  */
-export const FPF_RESULTS_FEED_IDS: number[] = [
-  89399, // Liga Portugal Betclic
-  71495, // Taça de Portugal
-  2161, // Campeonato de Portugal Série 2
-  1122, // Campeonato Nacional Feminino BPI
-  27629, // Liga Next Gen
-  5702, // Campeonato Nacional II Divisão Jun.A
-];
+export const FPF_RESULTS_FEED_IDS: number[] = FPF_COMPETITIONS.map((item) => item.id);
 
 export function getFpfMetaForId(id: number): FpfCompetitionMeta | null {
   return FPF_COMPETITIONS.find((item) => item.id === id) ?? null;

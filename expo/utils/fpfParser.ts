@@ -40,6 +40,27 @@ function extractDiv(html: string, className: string): string | null {
   return match ? stripHtmlTags(match[1]) : null;
 }
 
+/** Variante de extractDiv que devolve o HTML bruto (para extrair imagens). */
+function extractDivHtml(html: string, className: string): string | null {
+  const regex = new RegExp(`class="${className}"[^>]*>([\\s\\S]*?)</div>`);
+  const match = html.match(regex);
+  return match ? match[1] : null;
+}
+
+/** Extrai o logo da equipa do bloco .fpf-team-with-logo do artigo. */
+function extractTeamLogo(divHtml: string | null): string | null {
+  if (!divHtml) return null;
+
+  const imgMatch = divHtml.match(/<img[^>]*fpf-team-logo[^>]*>/);
+  if (!imgMatch) return null;
+
+  const srcMatch = imgMatch[0].match(/src="([^"]+)"/);
+  if (!srcMatch) return null;
+
+  // Versão full-res: remover sufixo de thumbnail (ex.: "-32x32.png" → ".png")
+  return decodeHtmlEntities(srcMatch[1]).replace(/-\d+x\d+(\.\w+)$/, '$1');
+}
+
 const MONTHS: Record<string, number> = {
   jan: 0,
   fev: 1,
@@ -99,6 +120,8 @@ export function resolveFpfDate(dateText: string, timeText: string | null): strin
 export interface FpfParsedMatch {
   home: string;
   away: string;
+  homeLogo: string | null;
+  awayLogo: string | null;
   score: { home: number; away: number } | null;
   date: string | null;
   stadium: string | null;
@@ -116,8 +139,10 @@ export interface FpfPageData {
 }
 
 function parseArticle(html: string): FpfParsedMatch | null {
-  const home = extractDiv(html, 'fpf-equipa fpf-casa');
-  const away = extractDiv(html, 'fpf-equipa fpf-fora');
+  const homeHtml = extractDivHtml(html, 'fpf-equipa fpf-casa');
+  const awayHtml = extractDivHtml(html, 'fpf-equipa fpf-fora');
+  const home = homeHtml ? stripHtmlTags(homeHtml) : null;
+  const away = awayHtml ? stripHtmlTags(awayHtml) : null;
   if (!home || !away) return null;
 
   const resultText = extractDiv(html, 'fpf-resultado');
@@ -140,6 +165,8 @@ function parseArticle(html: string): FpfParsedMatch | null {
   return {
     home,
     away,
+    homeLogo: extractTeamLogo(homeHtml),
+    awayLogo: extractTeamLogo(awayHtml),
     score,
     date: dateText ? resolveFpfDate(dateText, timeText) : null,
     stadium,
@@ -273,6 +300,8 @@ export function buildFpfMatches(rounds: FpfRoundData[], competitionId: number): 
         title: `${match.home} x ${match.away}`,
         team1: match.home,
         team2: match.away,
+        team1_logo: match.homeLogo ?? undefined,
+        team2_logo: match.awayLogo ?? undefined,
         score: scoreText,
         result_final: scoreText,
         status: match.score ? 'finished' : 'scheduled',
